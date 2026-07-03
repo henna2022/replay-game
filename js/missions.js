@@ -752,17 +752,20 @@ const MISSIONS = {
         const msg = bb.querySelector('.msg');
         const t0 = performance.now();
         let shown = 0, ended = false;
-        raf((now) => {
+        // rAF + interval 이중 구동 (탭이 가려져 rAF가 멈춰도 진행)
+        const tick = () => {
           if (ended) return;
-          const want = Math.min(text.length, Math.floor((now - t0) / 24));
+          const want = Math.min(text.length, Math.floor((performance.now() - t0) / 24));
           if (want > shown) {
             shown = want;
             msg.textContent = text.slice(0, shown);
             box.scrollTop = box.scrollHeight;
             if (shown % 8 === 0) sfx.tone(900 + (shown * 37) % 300, 0.02, 'sine', 0.02);
-            if (shown >= text.length) { ended = true; onEnd?.(); }
+            if (shown >= text.length) { ended = true; clearInterval(iv); onEnd?.(); }
           }
-        });
+        };
+        const iv = ticker(tick, 120);
+        raf(tick);
       }
     }
 
@@ -771,57 +774,49 @@ const MISSIONS = {
       runCleanup();
       root.innerHTML = '';
       root.appendChild(h(`<p class="m-status" id="pet-status">2/3 · <b>러봇</b> 코 쓰담쓰담 — 주황 코를 문질러 주세요! (<b id="pet-n">0</b>/5)</p>`));
-      const cv = h(`<canvas class="game-canvas" width="440" height="300"></canvas>`);
+      const cv = h(`<canvas class="game-canvas" width="440" height="340"></canvas>`);
       root.appendChild(cv);
       const ctx = cv.getContext('2d');
+      // 러봇(라임) 일러스트: 기본 / 활짝(쓰담) / 윙크(완료)
+      const imgs = {};
+      for (const k of [1, 2, 3]) {
+        const im = new Image();
+        im.src = `assets/ui/raim-${k}.png`;
+        imgs[k] = im;
+      }
       const hearts = [];
       let pets = 0, happyUntil = 0, lastPet = 0, finished = false;
-      const NOSE = { x: 220, y: 172, r: 26 };
+      let nose = { x: 220, y: 190, r: 30 };
 
       raf((now) => {
-        ctx.clearRect(0, 0, 440, 300);
+        ctx.clearRect(0, 0, 440, 340);
         const happy = now < happyUntil;
-        // 몸통 + 빨간 후드
-        ctx.fillStyle = '#8a6a52';
-        ctx.beginPath(); ctx.ellipse(220, 208, 95, 80, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#c23b3b';
-        ctx.beginPath(); ctx.ellipse(220, 132, 88, 78, 0, Math.PI, 0); ctx.fill();
-        ctx.fillRect(132, 130, 176, 26);
-        // 얼굴
-        ctx.fillStyle = '#7a5a44';
-        ctx.beginPath(); ctx.ellipse(220, 152, 62, 55, 0, 0, Math.PI * 2); ctx.fill();
-        // 눈 (행복하면 ^^)
-        if (happy) {
-          ctx.strokeStyle = '#59d6d6'; ctx.lineWidth = 5; ctx.lineCap = 'round';
-          for (const ex of [-30, 30]) {
-            ctx.beginPath(); ctx.arc(220 + ex, 144, 12, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke();
-          }
-        } else {
-          for (const ex of [-30, 30]) {
-            ctx.fillStyle = '#59d6d6';
-            ctx.beginPath(); ctx.arc(220 + ex, 142, 11, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = '#0d3b3b';
-            ctx.beginPath(); ctx.arc(220 + ex, 143, 5, 0, Math.PI * 2); ctx.fill();
-          }
+        const img = finished ? imgs[2] : (happy ? imgs[3] : imgs[1]);
+        // contain-fit 배치
+        const base = imgs[1];
+        const iw = base.naturalWidth || 440, ih = base.naturalHeight || 388;
+        const s = Math.min(400 / iw, 300 / ih);
+        const w = iw * s, hh = ih * s;
+        const L = { x: (440 - w) / 2, y: 330 - hh, w, h: hh };
+        if (img.complete && img.naturalWidth) ctx.drawImage(img, L.x, L.y, L.w, L.h);
+        // 코 히트존 (얼굴 중앙)
+        nose = { x: L.x + L.w * 0.47, y: L.y + L.h * 0.55, r: Math.max(22, L.w * 0.1) };
+        if (!finished) {
+          const pulse = 1 + Math.sin(now / 300) * 0.1;
+          ctx.strokeStyle = 'rgba(255,160,120,.85)';
+          ctx.lineWidth = 2.5;
+          ctx.setLineDash([6, 6]);
+          ctx.beginPath(); ctx.arc(nose.x, nose.y, nose.r * pulse, 0, Math.PI * 2); ctx.stroke();
+          ctx.setLineDash([]);
         }
-        // 코 (쓰담 포인트, 은은히 반짝)
-        const pulse = 1 + Math.sin(now / 300) * 0.08;
-        ctx.fillStyle = '#ff9a76';
-        ctx.beginPath(); ctx.arc(NOSE.x, NOSE.y, 13 * pulse, 0, Math.PI * 2); ctx.fill();
-        ctx.strokeStyle = 'rgba(255,214,140,.7)'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(NOSE.x, NOSE.y, NOSE.r * pulse, 0, Math.PI * 2); ctx.stroke();
-        // 센서 혼
-        ctx.fillStyle = '#17181d';
-        ctx.fillRect(213, 46, 14, 26);
-        ctx.beginPath(); ctx.arc(220, 44, 9, 0, Math.PI * 2); ctx.fill();
         // 하트 파티클
         ctx.font = '26px sans-serif'; ctx.textAlign = 'center';
         for (let i = hearts.length - 1; i >= 0; i--) {
-          const hh = hearts[i];
-          hh.y -= 1.4; hh.a -= 0.012; hh.x += Math.sin(hh.y / 14) * 0.8;
-          if (hh.a <= 0) { hearts.splice(i, 1); continue; }
-          ctx.globalAlpha = hh.a;
-          ctx.fillText('💗', hh.x, hh.y);
+          const hh2 = hearts[i];
+          hh2.y -= 1.4; hh2.a -= 0.012; hh2.x += Math.sin(hh2.y / 14) * 0.8;
+          if (hh2.a <= 0) { hearts.splice(i, 1); continue; }
+          ctx.globalAlpha = hh2.a;
+          ctx.fillText('💗', hh2.x, hh2.y);
         }
         ctx.globalAlpha = 1;
       });
@@ -830,19 +825,19 @@ const MISSIONS = {
         if (finished) return;
         const rect = cv.getBoundingClientRect();
         const x = (e.clientX - rect.left) / rect.width * 440;
-        const y = (e.clientY - rect.top) / rect.height * 300;
+        const y = (e.clientY - rect.top) / rect.height * 340;
         const now = performance.now();
-        if (Math.hypot(x - NOSE.x, y - NOSE.y) < NOSE.r + 10 && now - lastPet > 320) {
+        if (Math.hypot(x - nose.x, y - nose.y) < nose.r + 12 && now - lastPet > 320) {
           lastPet = now;
           pets++;
-          happyUntil = now + 700;
+          happyUntil = now + 750;
           sfx.ok();
-          for (let i = 0; i < 3; i++) hearts.push({ x: 220 + (Math.random() - 0.5) * 60, y: 108, a: 1 });
+          for (let i = 0; i < 3; i++) hearts.push({ x: nose.x + (Math.random() - 0.5) * 70, y: nose.y - 80, a: 1 });
           root.querySelector('#pet-n').textContent = pets;
           if (pets >= 5) {
             finished = true;
             root.querySelector('#pet-status').innerHTML = '💗 러봇이 행복해해요! 팔 안쪽에서 따뜻한 온기가 느껴져요.';
-            timer(() => next(), 1400);
+            timer(() => next(), 1500);
           }
         }
       }

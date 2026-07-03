@@ -8,19 +8,31 @@ let toastTimer = null;
 
 export const ui = {
   init({ onInteract, onReset, onIdleContinue }) {
-    // 기록장 (미션 순서대로)
+    // 기록장 (표시 번호 = zone.id - 1)
     const grid = $('stamp-grid');
     grid.innerHTML = '';
-    SEQUENCE.forEach((zoneId, i) => {
+    SEQUENCE.forEach((zoneId) => {
       const z = ZONES.find(zz => zz.id === zoneId);
       const el = document.createElement('div');
       el.className = 'stamp';
       el.id = `stamp-${z.id}`;
       el.innerHTML = `
-        <div class="s-num" style="background:${z.color}">${i + 1}</div>
+        <div class="s-num" style="background:${z.color}">${z.id - 1}</div>
         <div class="s-name">${z.name}</div>
         <div class="s-mark">·</div>`;
       grid.appendChild(el);
+    });
+
+    // 우측 진척도 패널 (자유 순서)
+    const hp = $('hud-progress');
+    hp.innerHTML = '';
+    SEQUENCE.forEach((zoneId) => {
+      const z = ZONES.find(zz => zz.id === zoneId);
+      const row = document.createElement('div');
+      row.className = 'hp-row';
+      row.id = `hp-${z.id}`;
+      row.innerHTML = `<span class="hp-num" style="background:${z.color}">${z.id - 1}</span><span class="hp-name">${z.name}</span><span class="hp-mark">○</span>`;
+      hp.appendChild(row);
     });
 
     $('btn-stamps').addEventListener('click', () => {
@@ -48,28 +60,23 @@ export const ui = {
 
   showHUD(v = true) { $('hud').classList.toggle('hidden', !v); },
 
-  // 진행 상황: done = 완료한 미션 수
-  updateProgress(doneCount, nextZone) {
-    $('stamp-count').textContent = doneCount;
-    SEQUENCE.forEach((zoneId, i) => {
+  // 진행 상황: doneSet = 완료한 미션 존 id Set (자유 순서)
+  updateProgress(doneSet) {
+    $('stamp-count').textContent = doneSet.size;
+    SEQUENCE.forEach((zoneId) => {
+      const isDone = doneSet.has(zoneId);
       const el = $(`stamp-${zoneId}`);
-      if (!el) return;
-      const isDone = i < doneCount;
-      const isNext = i === doneCount;
-      el.classList.toggle('done', isDone);
-      el.classList.toggle('next', isNext);
-      el.querySelector('.s-mark').textContent = isDone ? '✓' : (isNext ? '▶' : '🔒');
+      if (el) {
+        el.classList.toggle('done', isDone);
+        el.classList.remove('next');
+        el.querySelector('.s-mark').textContent = isDone ? '✓' : '·';
+      }
+      const row = $(`hp-${zoneId}`);
+      if (row) {
+        row.classList.toggle('done', isDone);
+        row.querySelector('.hp-mark').textContent = isDone ? '✓' : '○';
+      }
     });
-    const hudNext = $('hud-next');
-    if (nextZone) {
-      hudNext.innerHTML = `다음 미션 <b>${doneCount + 1}/10</b> — ${nextZone.name}`;
-      hudNext.classList.remove('hidden');
-    } else if (doneCount >= SEQUENCE.length) {
-      hudNext.innerHTML = `🔑 황금 열쇠 획득 — 현실로 귀환합니다`;
-      hudNext.classList.remove('hidden');
-    } else {
-      hudNext.classList.add('hidden');
-    }
   },
 
   _promptZoneId: null,

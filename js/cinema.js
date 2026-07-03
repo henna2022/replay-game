@@ -28,7 +28,7 @@ const OUTRO_END = 19.5;
 const OP = { exitWarp: 4.0, closing: 9.0, city: 14.0 };
 
 const STAGES = {
-  passage: { src: 'assets/videos/passage.mp4', dir: 1, captions: PASSAGE_CAPTIONS, end: PASSAGE_END },
+  passage: { src: 'assets/videos/opening.mp4', dir: 1, captions: PASSAGE_CAPTIONS, end: PASSAGE_END },
   outro: { src: 'assets/videos/outro.mp4', dir: -1, captions: OUTRO_CAPTIONS, end: OUTRO_END },
 };
 
@@ -78,8 +78,53 @@ export function playCinema(stageName, onDone) {
     });
     const onEnd = () => finish();
     videoEl.addEventListener('ended', onEnd, { once: true });
+
+    // 영상 위 자막 오버레이 — 영상 길이에 비례해 타이밍 자동 배분 + 타자기 효과
+    // (rAF + timeupdate 이중 구동: 탭이 가려져 rAF가 멈춰도 자막은 진행)
+    const caption = document.createElement('p');
+    caption.className = 'video-caption';
+    overlay.appendChild(caption);
+    let capIdx = -1, capShown = 0, rafId = 0;
+    const capTick = () => {
+      if (!active) return;
+      const dur = videoEl.duration;
+      if (!dur || !isFinite(dur)) return;
+      const t = videoEl.currentTime;
+      let idx = -1;
+      for (let i = 0; i < stage.captions.length; i++) {
+        if (t >= (stage.captions[i].t / stage.end) * dur) idx = i;
+      }
+      if (idx !== capIdx && idx >= 0) {
+        capIdx = idx;
+        capShown = 0;
+        caption.classList.remove('cap-in');
+        void caption.offsetWidth;
+        caption.classList.add('cap-in');
+      }
+      if (capIdx >= 0) {
+        const cap = stage.captions[capIdx];
+        const capT0 = (cap.t / stage.end) * dur;
+        const want = Math.min(cap.text.length, Math.floor((t - capT0) / 0.032));
+        if (want > capShown) {
+          capShown = want;
+          caption.innerHTML = cap.text.slice(0, capShown).replaceAll('\n', '<br>');
+          if (capShown % 4 === 1) sfx.tone(1500, 0.018, 'square', 0.025); // 슉슉 틱
+        }
+      }
+    };
+    const capLoop = () => {
+      if (!active) return;
+      rafId = requestAnimationFrame(capLoop);
+      capTick();
+    };
+    rafId = requestAnimationFrame(capLoop);
+    videoEl.addEventListener('timeupdate', capTick);
+
     cleanup = () => {
       active = false;
+      cancelAnimationFrame(rafId);
+      videoEl.removeEventListener('timeupdate', capTick);
+      caption.remove();
       videoEl.removeEventListener('ended', onEnd);
       videoEl.pause();
       videoEl.removeAttribute('src');

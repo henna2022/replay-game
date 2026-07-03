@@ -23,6 +23,7 @@ function loadModelSlot(parent, path, { height = 1.5, x = 0, y = 0, z = 0, ry = 0
     wrap.add(model);
     wrap.position.set(x, y, z);
     wrap.rotation.y = ry;
+    wrap.userData.baseRy = ry;
     for (const o of hide) o.visible = false;
     parent.add(wrap);
     onLoad?.(wrap);
@@ -92,7 +93,7 @@ function makeZoneSign(zone) {
   post.position.y = 1.3;
   g.add(post);
 
-  const tex = makeLabel(`${zone.id}  ${zone.name}`, { color: '#ffffff', bg: '#161a24', size: 76 });
+  const tex = makeLabel(`${zone.id - 1}  ${zone.name}`, { color: '#ffffff', bg: '#161a24', size: 76 });
   const panel = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.5), new THREE.MeshBasicMaterial({ map: tex }));
   panel.position.y = 2.75;
   g.add(panel);
@@ -361,12 +362,12 @@ const builders = {
     // ── 실제 3D 모델 슬롯: G1 휴머노이드 + 로봇개 ──
     let g1Model = null, dogModel = null;
     loadModelSlot(g, 'assets/models/g1.glb', {
-      height: 1.5, x: 0, y: 0.03, z: 0,
+      height: 1.5, x: 0, y: 0.03, z: 0, ry: -Math.PI / 2,
       hide: [robot, strapL, strapR],
       onLoad: (w) => { g1Model = w; },
     });
     loadModelSlot(g, 'assets/models/robotdog.glb', {
-      height: 0.55, x: -1.5, y: 0, z: 0.9, ry: 0.6,
+      height: 0.55, x: -1.5, y: 0, z: 0.9, ry: 0.6 - Math.PI / 2,
       hide: [dog],
       onLoad: (w) => { dogModel = w; },
     });
@@ -400,7 +401,7 @@ const builders = {
           // G1 모델 댄스 (바운스 + 스웨이 + 트위스트)
           const beat = t * 4.6;
           g1Model.position.y = 0.03 + Math.abs(Math.sin(beat)) * 0.06;
-          g1Model.rotation.y = Math.sin(t * 1.15) * 0.55;
+          g1Model.rotation.y = g1Model.userData.baseRy + Math.sin(t * 1.15) * 0.55;
           g1Model.rotation.z = Math.sin(beat * 0.5) * 0.06;
         } else {
           // 절차 생성 로봇 댄스 (하네스에 매달린 채)
@@ -418,7 +419,7 @@ const builders = {
           refs.head.rotation.x = Math.sin(beat) * 0.06;
         }
         if (dogModel) {
-          dogModel.rotation.y = 0.6 + Math.sin(t * 0.7) * 0.18;
+          dogModel.rotation.y = dogModel.userData.baseRy + Math.sin(t * 0.7) * 0.18;
           dogModel.position.y = Math.abs(Math.sin(t * 2.3)) * 0.025;
         } else {
           dog.rotation.y = 0.6 + Math.sin(t * 0.7) * 0.08;
@@ -484,7 +485,7 @@ const builders = {
     const kScreen = photoScreen(0.92, 0.55, 'assets/textures/screen-arm-bg.jpg');
     kScreen.position.set(0, 1.18, 0.1); kScreen.rotation.x = -0.3; kiosk.add(kScreen);
     const kFrame = box(1.0, 0.63, 0.05, mat('#17181d')); kFrame.position.set(0, 1.17, 0.07); kFrame.rotation.x = -0.3; kiosk.add(kFrame);
-    kiosk.position.set(1.95, 0, 0.7); kiosk.rotation.y = -0.5;
+    kiosk.position.set(2.6, 0, 1.8); kiosk.rotation.y = -0.55;
     g.add(kiosk);
 
     // 웹캠
@@ -586,15 +587,15 @@ const builders = {
     // ── 실제 3D 모델 슬롯: 리쿠 · 러봇 (발루는 balu.glb 준비되면 자동 교체) ──
     let likuModel = null, lovotModel = null, balluModel = null;
     loadModelSlot(g, 'assets/models/liku.glb', {
-      height: 0.52, x: -1.5, y: 1.0, z: 0.1, ry: 0.35,
+      height: 0.52, x: -1.5, y: 1.0, z: 0.1, ry: 0.35 - Math.PI / 2,
       hide: [liku], onLoad: (w) => { likuModel = w; },
     });
     loadModelSlot(g, 'assets/models/lovbot.glb', {
-      height: 0.46, x: -0.65, y: 1.0, z: 0.1, ry: -0.25,
+      height: 0.46, x: -0.65, y: 1.0, z: 0.1, ry: -0.25 - Math.PI / 2,
       hide: [lovot], onLoad: (w) => { lovotModel = w; },
     });
     loadModelSlot(g, 'assets/models/balu.glb', {
-      height: 0.62, x: 0.95, y: 0.82, z: 0.15,
+      height: 0.62, x: 0.95, y: 0.82, z: 0.15, ry: -Math.PI / 2,
       hide: [ballu], onLoad: (w) => { balluModel = w; },
     });
 
@@ -603,11 +604,11 @@ const builders = {
       group: g,
       update(dt) {
         t += dt;
-        if (likuModel) likuModel.rotation.y = 0.35 + Math.sin(t * 0.6) * 0.4;
+        if (likuModel) likuModel.rotation.y = likuModel.userData.baseRy + Math.sin(t * 0.6) * 0.4;
         else liku.rotation.y = 0.35 + Math.sin(t * 0.6) * 0.4;      // 리쿠 두리번
         if (lovotModel) {
           lovotModel.position.y = 1.0 + Math.abs(Math.sin(t * 2.0)) * 0.028;
-          lovotModel.rotation.y = -0.25 + Math.sin(t * 0.9) * 0.15;
+          lovotModel.rotation.y = lovotModel.userData.baseRy + Math.sin(t * 0.9) * 0.15;
         } else {
           lovot.position.y = 1.0 + Math.abs(Math.sin(t * 2.0)) * 0.028; // 러봇 콩콩
           lovot.rotation.y = -0.25 + Math.sin(t * 0.9) * 0.15;
@@ -1058,7 +1059,7 @@ const builders = {
     // ── 실제 3D 모델 슬롯: 아메카 ──
     let amecaModel = null;
     loadModelSlot(g, 'assets/models/ameca.glb', {
-      height: 1.0, y: 1.05,
+      height: 1.0, y: 1.05, ry: -Math.PI / 2,
       hide: [bust], onLoad: (w) => { amecaModel = w; },
     });
 
@@ -1076,7 +1077,7 @@ const builders = {
       update(dt) {
         t += dt;
         if (amecaModel) {
-          amecaModel.rotation.y = Math.sin(t * 0.6) * 0.35; // 좌우 둘러보기
+          amecaModel.rotation.y = amecaModel.userData.baseRy + Math.sin(t * 0.6) * 0.35; // 좌우 둘러보기
           return;
         }
         headPivot.rotation.y = Math.sin(t * 0.6) * 0.5;
@@ -1141,15 +1142,6 @@ function buildWalls(scene) {
     { ax: f.x + hw, az: f.z + hd, bx: f.x - hw, bz: f.z + hd },
     { ax: f.x - hw, az: f.z + hd, bx: f.x - hw, bz: f.z - hd },
   );
-
-  const stTex = makeLabel('STAIRS', { color: '#8a94a8', size: 64, w: 640, h: 160 });
-  [[-16.8, -6.4, 0], [-16.4, 1.4, Math.PI]].forEach(([x, z, ry]) => {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.48),
-      new THREE.MeshBasicMaterial({ map: stTex, transparent: true, side: THREE.DoubleSide }));
-    m.position.set(x, 2.0, z);
-    m.rotation.y = ry;
-    scene.add(m);
-  });
 
   return segments;
 }

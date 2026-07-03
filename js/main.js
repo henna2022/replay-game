@@ -34,19 +34,18 @@ window.addEventListener('resize', () => {
 /* ---------- 상태 ---------- */
 // state: 'splash' | 'cinema' | 'playing' | 'ending'
 let state = 'splash';
-let progress = 0;           // 완료한 미션 수 (0..10)
+let done = new Set();       // 완료한 미션 존 id (자유 순서)
 let startTime = null;
 let savedElapsed = 0;
 let missionOpen = false;
 let lastActivity = performance.now();
 
 const zoneById = (id) => ZONES.find(z => z.id === id);
-const missionIndexOf = (zoneId) => SEQUENCE.indexOf(zoneId); // -1 이면 미션 없음(통로)
 
 function saveGame() {
   const elapsed = savedElapsed + (startTime ? Date.now() - startTime : 0);
   localStorage.setItem(SAVE_KEY, JSON.stringify({
-    progress, elapsed,
+    done: [...done], elapsed,
     shots: missionData.shots,
     avatar: missionData.avatar,
   }));
@@ -62,7 +61,7 @@ function loadGame() {
   try {
     const data = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
     if (data) {
-      progress = Math.max(0, Math.min(SEQUENCE.length, Math.floor(Number(data.progress) || 0)));
+      done = new Set((Array.isArray(data.done) ? data.done : []).filter(id => SEQUENCE.includes(id)));
       savedElapsed = Math.max(0, Number(data.elapsed) || 0);
       missionData.shots = Array.isArray(data.shots) ? data.shots : null;
       missionData.avatar = data.avatar || null;
@@ -71,7 +70,7 @@ function loadGame() {
 }
 function resetGame({ toast = true } = {}) {
   localStorage.removeItem(SAVE_KEY);
-  progress = 0;
+  done = new Set();
   savedElapsed = 0;
   startTime = Date.now();
   missionData.shots = null;
@@ -103,12 +102,10 @@ player.setPose(SPAWN.x, SPAWN.z, SPAWN.yaw);
 /* ---------- 순차 진행 ---------- */
 
 function syncProgressUI() {
-  const next = progress < SEQUENCE.length ? zoneById(SEQUENCE[progress]) : null;
-  ui.updateProgress(progress, next);
-  for (let i = 0; i < SEQUENCE.length; i++) world.setZoneCompleted(SEQUENCE[i], i < progress);
-  const allDone = progress >= SEQUENCE.length;
-  world.setKeyObtained(allDone);
-  world.setBeacon(allDone ? null : next.id, allDone ? undefined : next.color);
+  ui.updateProgress(done);
+  for (const id of SEQUENCE) world.setZoneCompleted(id, done.has(id));
+  world.setKeyObtained(done.size >= SEQUENCE.length);
+  world.setBeacon(null); // 자유 순서 — 우측 진척도 패널이 안내
 }
 
 /* ---------- 상호작용 ---------- */
@@ -147,16 +144,8 @@ function interact(zoneId) {
   // 벽 너머 상호작용 방지
   if (wallBetween(player.pos.x, player.pos.z, zone.pos[0], zone.pos[1])) return;
 
-  const idx = missionIndexOf(zone.id);
-  if (idx > progress || (idx === -1)) {
-    // 아직 잠긴 존
-    const next = zoneById(SEQUENCE[Math.min(progress, SEQUENCE.length - 1)]);
-    sfx.bad();
-    ui.toast(`🔒 아직 잠겨 있어요. 다음 미션은 <b>${next.name}</b>입니다.`);
-    return;
-  }
-
-  const isReplay = idx < progress;
+  if (!SEQUENCE.includes(zone.id)) return;
+  const isReplay = done.has(zone.id);
   missionOpen = true;
   player.enabled = false;
   if (isReplay) ui.toast('이미 기록한 미션이에요. 자유롭게 다시 체험해 보세요!');
@@ -165,17 +154,16 @@ function interact(zoneId) {
     player.enabled = (state === 'playing');
     lastActivity = performance.now();
     if (success && !isReplay) {
-      progress++;
+      done.add(zone.id);
       saveGame();
       syncProgressUI();
-      if (progress >= SEQUENCE.length) {
-        // 미션 10 완료 → 아웃트로 영상 → 엔딩
+      if (done.size >= SEQUENCE.length) {
+        // 10개 미션 완료 → 아웃트로 영상 → 엔딩
         sfx.portal();
         ui.toast('🔑 황금 열쇠가 빛납니다 — 현실로 귀환합니다!', 2400);
         setTimeout(() => { if (state === 'playing') startEnding(); }, 2600);
       } else {
-        const next = zoneById(SEQUENCE[progress]);
-        ui.toast(`📓 미션 ${progress}/10 기록! 다음은 <b>${next.name}</b> — 초록 빛기둥을 따라가세요.`, 3200);
+        ui.toast(`📓 미션 기록 ${done.size}/10! 남은 전시를 자유롭게 체험하세요.`, 3000);
       }
     }
   });
@@ -194,11 +182,9 @@ function updatePrompt() {
   }
   if (!nearest) { ui.showPrompt(null); return; }
 
-  const idx = missionIndexOf(nearest.id);
-  if (idx > progress) { ui.showPrompt(null); return; } // 잠긴 존은 프롬프트 없음
-  const label = idx < progress
+  const label = done.has(nearest.id)
     ? `✓ 「${nearest.name}」 다시 체험하기`
-    : `미션 ${idx + 1} — 「${nearest.name}」 시작하기`;
+    : `미션 ${nearest.id - 1} — 「${nearest.name}」 시작하기`;
   ui.showPrompt(nearest.id, label);
 }
 
@@ -251,11 +237,11 @@ syncProgressUI();
 
 function updateSplashContinue() {
   const cont = document.getElementById('splash-continue');
-  if (progress >= SEQUENCE.length) {
+  if (done.size >= SEQUENCE.length) {
     cont.textContent = '이어하기 — 모든 미션 완료! 시작하면 바로 귀환 엔딩이 재생됩니다.';
     cont.classList.remove('hidden');
-  } else if (progress > 0) {
-    cont.textContent = `이어하기 — 지금까지 ${progress}/10개 미션을 기록했습니다.`;
+  } else if (done.size > 0) {
+    cont.textContent = `이어하기 — 지금까지 ${done.size}/10개 미션을 기록했습니다.`;
     cont.classList.remove('hidden');
   } else {
     cont.classList.add('hidden');
@@ -271,10 +257,9 @@ function startGameplay() {
   player.setPose(SPAWN.x, SPAWN.z, SPAWN.yaw);
   player.enabled = true;
   syncProgressUI();
-  const next = progress < SEQUENCE.length ? zoneById(SEQUENCE[progress]) : null;
   setTimeout(() => {
-    if (state !== 'playing' || !next) return;
-    ui.toast(`👣 빛기둥을 따라 <b>${next.name}</b>로 이동하세요 (미션 ${progress + 1}/10)`, 3600);
+    if (state !== 'playing' || done.size >= SEQUENCE.length) return;
+    ui.toast('👣 원하는 전시부터 자유롭게 체험하세요 — 우측 목록에서 진행 상황을 확인!', 3600);
   }, 600);
 }
 
@@ -285,7 +270,7 @@ document.getElementById('btn-start').addEventListener('click', () => {
   state = 'cinema';
   // 통로 시네마틱(도시 불빛 → 포털 → 흡입 → 미스터리 놀이터) → 맵 진입
   playCinema('passage', () => {
-    if (progress >= SEQUENCE.length) { state = 'playing'; startEnding(); }
+    if (done.size >= SEQUENCE.length) { state = 'playing'; startEnding(); }
     else startGameplay();
   });
 });
@@ -326,9 +311,9 @@ window.addEventListener('visibilitychange', () => {
 // 개발용 콘솔 핸들 (배포에 영향 없음)
 window.__replay = {
   player, interact, camera, scene,
-  get progress() { return progress; },
-  set progress(v) { progress = v; syncProgressUI(); saveGame(); },
-  skipToEnd() { progress = SEQUENCE.length; syncProgressUI(); saveGame(); },
+  get progress() { return done.size; },
+  set progress(v) { done = new Set(SEQUENCE.slice(0, v)); syncProgressUI(); saveGame(); },
+  skipToEnd() { done = new Set(SEQUENCE); syncProgressUI(); saveGame(); },
   startGameplay,
 };
 

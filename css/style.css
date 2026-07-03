@@ -270,16 +270,31 @@ canvas.game { display: block; position: fixed; inset: 0; }
 }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, -8px); } }
 
-/* ---------- HUD 다음 미션 안내 ---------- */
-#hud-next {
-  position: absolute; left: 50%; top: calc(66px + env(safe-area-inset-top));
-  transform: translateX(-50%);
-  background: rgba(12,14,20,.6); border: 1px solid var(--line);
-  border-radius: 999px; padding: 8px 18px;
-  font-size: 13.5px; color: var(--dim); white-space: nowrap;
+/* ---------- 우측 진척도 패널 (자유 순서) ---------- */
+#hud-progress {
+  position: absolute; right: 10px; top: 50%;
+  transform: translateY(-50%);
+  display: flex; flex-direction: column; gap: 4px;
+  background: rgba(12,14,20,.55); border: 1px solid var(--line);
+  border-radius: 14px; padding: 8px;
   backdrop-filter: blur(6px);
+  max-width: 46vw;
 }
-#hud-next b { color: var(--accent); }
+.hp-row {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11.5px; color: var(--dim);
+  padding: 2px 4px; border-radius: 8px;
+  white-space: nowrap;
+}
+.hp-row .hp-num {
+  width: 17px; height: 17px; border-radius: 50%; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 800; color: #fff; opacity: .85;
+}
+.hp-row .hp-name { overflow: hidden; text-overflow: ellipsis; max-width: 96px; }
+.hp-row .hp-mark { margin-left: auto; font-size: 11px; }
+.hp-row.done { color: var(--text); }
+.hp-row.done .hp-mark { color: var(--accent); font-weight: 800; }
 
 /* ---------- 영상 스테이지 ---------- */
 #video-stage {
@@ -288,12 +303,13 @@ canvas.game { display: block; position: fixed; inset: 0; }
 #video-player { width: 100%; height: 100%; object-fit: cover; }
 #cinema { position: absolute; inset: 0; }
 #cinema-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-#cinema-caption {
+#cinema-caption, .video-caption {
   position: absolute; left: 50%; bottom: 14%;
   transform: translateX(-50%);
   width: min(84vw, 640px); text-align: center;
   font-size: clamp(17px, 2.6vw, 23px); font-weight: 700; line-height: 1.7;
   color: var(--text); text-shadow: 0 2px 18px rgba(0,0,0,.8);
+  z-index: 2;
 }
 .cap-in { animation: cap-in .7s ease; }
 @keyframes cap-in { from { opacity: 0; transform: translate(-50%, 12px); } }
