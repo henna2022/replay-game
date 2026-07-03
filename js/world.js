@@ -1118,30 +1118,20 @@ function buildWalls(scene) {
     segments.push({ ax: w.a[0], az: w.a[1], bx: w.b[0], bz: w.b[1] });
   }
 
-  const f = FACILITY;
-  const block = box(f.w, WALL_HEIGHT, f.d, mat('#1c2230', { roughness: 0.95 }));
-  block.position.set(f.x, WALL_HEIGHT / 2, f.z);
-  scene.add(block);
-
-  const facLabel = (text, x, z, ry) => {
-    const tex = makeLabel(text, { color: '#8a94a8', size: 64, w: 640, h: 160 });
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.55),
-      new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide }));
-    m.position.set(x, 2.1, z);
-    m.rotation.y = ry;
-    scene.add(m);
-  };
-  facLabel('ELEVATOR', f.x - f.w / 4, f.z - f.d / 2 - 0.05, 0);
-  facLabel('STAIRS', f.x + f.w / 4, f.z - f.d / 2 - 0.05, 0);
-  facLabel('🚻', f.x + f.w / 2 + 0.05, f.z, Math.PI / 2);
-
-  const hw = f.w / 2, hd = f.d / 2;
-  segments.push(
-    { ax: f.x - hw, az: f.z - hd, bx: f.x + hw, bz: f.z - hd },
-    { ax: f.x + hw, az: f.z - hd, bx: f.x + hw, bz: f.z + hd },
-    { ax: f.x + hw, az: f.z + hd, bx: f.x - hw, bz: f.z + hd },
-    { ax: f.x - hw, az: f.z + hd, bx: f.x - hw, bz: f.z - hd },
-  );
+  // 시설 블록(엘리베이터·화장실)은 제거됨 (FACILITY === null)
+  if (FACILITY) {
+    const f = FACILITY;
+    const block = box(f.w, WALL_HEIGHT, f.d, mat('#1c2230', { roughness: 0.95 }));
+    block.position.set(f.x, WALL_HEIGHT / 2, f.z);
+    scene.add(block);
+    const hw = f.w / 2, hd = f.d / 2;
+    segments.push(
+      { ax: f.x - hw, az: f.z - hd, bx: f.x + hw, bz: f.z - hd },
+      { ax: f.x + hw, az: f.z - hd, bx: f.x + hw, bz: f.z + hd },
+      { ax: f.x + hw, az: f.z + hd, bx: f.x - hw, bz: f.z + hd },
+      { ax: f.x - hw, az: f.z + hd, bx: f.x - hw, bz: f.z - hd },
+    );
+  }
 
   return segments;
 }
@@ -1213,12 +1203,12 @@ function buildHall(scene) {
 
   const entTex = makeLabel('⬆ ENTRANCE', { color: '#9aa3b5', size: 72, w: 768, h: 160 });
   const ent = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 0.62), new THREE.MeshBasicMaterial({ map: entTex, transparent: true }));
-  ent.position.set(6.7, 2.6, HALL_RADIUS - 0.4);
+  ent.position.set(0, 2.6, HALL_RADIUS - 0.4);
   ent.rotation.y = Math.PI;
   scene.add(ent);
 
   const entLine = box(3.4, 0.02, 0.12, glow('#5ee6a8', 1.2));
-  entLine.position.set(6.7, 0.02, 12.2);
+  entLine.position.set(0, 0.02, 17.0);
   scene.add(entLine);
 
   const dCount = 160;
@@ -1263,7 +1253,7 @@ export function buildWorld(scene) {
     const built = builders[zone.id](zone);
     const root = new THREE.Group();
     root.position.set(x, 0, z);
-    root.rotation.y = Math.atan2(-x + 3, -z + 12);
+    root.rotation.y = Math.atan2(-x, 17 - z); // 입구(하단 중앙)를 바라보도록
     root.add(built.group);
 
     const sign = makeZoneSign(zone);
