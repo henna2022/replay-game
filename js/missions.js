@@ -222,26 +222,175 @@ function runSimon(root, { pads, rounds, playPad, watchText = 'AI가 보여줍니
   playSequence();
 }
 
+/* ---------- DDR 리듬 게임 엔진 (미션1) ---------- */
+
+function runDDR(root, done) {
+  const LANES = 4;
+  const ARROWS = ['◀', '▲', '▼', '▶'];
+  const KEYMAP = { ArrowLeft: 0, ArrowUp: 1, ArrowDown: 2, ArrowRight: 3 };
+  const COLORS = ['#ff7878', '#78b4ff', '#ffd75f', '#5ee6a8'];
+  const W = 440, H = 380, TARGET_Y = 300, FALL_SEC = 1.9;
+  const TOTAL = 22, NEED = 15;
+
+  root.innerHTML = '';
+  root.appendChild(h(`<p class="m-status" id="ddr-status">화살표가 <b>아래 칸</b>에 닿는 순간 밟으세요! (${NEED}/${TOTAL} 이상)<br>PC는 방향키 ← ↑ ↓ → 로도 가능</p>`));
+  const cv = h(`<canvas class="game-canvas" width="${W}" height="${H}"></canvas>`);
+  root.appendChild(cv);
+  const status = root.querySelector('#ddr-status');
+  const ctx = cv.getContext('2d');
+  const laneW = W / LANES;
+
+  const notes = Array.from({ length: TOTAL }, (_, i) => ({
+    lane: Math.floor(Math.random() * LANES),
+    t: 2 + i * 0.85,
+    state: 'fall',
+  }));
+
+  let hits = 0, finished = false;
+  const start = performance.now();
+  let flashes = []; // {lane, until, ok}
+  let judge = { text: '', until: 0, color: '#fff' };
+
+  function drawArrow(x, y, dir, size, color, alpha = 1, outline = false) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate([Math.PI / 2, Math.PI, 0, -Math.PI / 2][dir]); // ◀▲▼▶ 방향
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    ctx.moveTo(0, size * 0.55);       // 꼭짓점 (회전 기준: ▼)
+    ctx.lineTo(-size * 0.5, -size * 0.1);
+    ctx.lineTo(-size * 0.2, -size * 0.1);
+    ctx.lineTo(-size * 0.2, -size * 0.55);
+    ctx.lineTo(size * 0.2, -size * 0.55);
+    ctx.lineTo(size * 0.2, -size * 0.1);
+    ctx.lineTo(size * 0.5, -size * 0.1);
+    ctx.closePath();
+    if (outline) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function tryHit(lane) {
+    if (finished) return;
+    const now = performance.now();
+    const t = (now - start) / 1000;
+    let best = null, bestDiff = 1e9;
+    for (const n of notes) {
+      if (n.state !== 'fall' || n.lane !== lane) continue;
+      const y = ((t - n.t) / FALL_SEC + 1) * TARGET_Y;
+      const diff = Math.abs(y - TARGET_Y);
+      if (diff < bestDiff) { bestDiff = diff; best = n; }
+    }
+    if (best && bestDiff < 20) {
+      best.state = 'hit'; hits++;
+      judge = { text: 'PERFECT!', until: now + 400, color: '#5ee6a8' };
+      sfx.ok();
+    } else if (best && bestDiff < 40) {
+      best.state = 'hit'; hits++;
+      judge = { text: 'GOOD', until: now + 400, color: '#6aa7ff' };
+      sfx.pad(lane);
+    } else {
+      judge = { text: 'MISS', until: now + 350, color: '#ff6b6b' };
+      sfx.hihat();
+    }
+    flashes.push({ lane, until: now + 180, ok: !!(best && bestDiff < 40) });
+    status.innerHTML = `🤖 로봇 신남 게이지 — 성공 <b>${hits}</b>/${TOTAL} (목표 ${NEED})`;
+  }
+
+  const onKey = (e) => {
+    if (KEYMAP[e.code] !== undefined) { e.preventDefault(); tryHit(KEYMAP[e.code]); }
+  };
+  window.addEventListener('keydown', onKey);
+  onCleanup(() => window.removeEventListener('keydown', onKey));
+
+  cv.addEventListener('pointerdown', (e) => {
+    const rect = cv.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width * W;
+    tryHit(Math.max(0, Math.min(LANES - 1, Math.floor(x / laneW))));
+  });
+
+  raf((now) => {
+    const t = (now - start) / 1000;
+    ctx.clearRect(0, 0, W, H);
+
+    // 레인 배경 + 히트 플래시
+    for (let i = 0; i < LANES; i++) {
+      ctx.fillStyle = i % 2 ? 'rgba(255,255,255,.03)' : 'rgba(255,255,255,.015)';
+      ctx.fillRect(i * laneW, 0, laneW, H);
+      const f = flashes.find(fl => fl.lane === i && now < fl.until);
+      if (f) {
+        ctx.fillStyle = f.ok ? 'rgba(94,230,168,.25)' : 'rgba(255,107,107,.2)';
+        ctx.fillRect(i * laneW, TARGET_Y - 36, laneW, 72);
+      }
+    }
+    // 타겟 화살표 (외곽선)
+    for (let i = 0; i < LANES; i++) {
+      drawArrow(i * laneW + laneW / 2, TARGET_Y, i, 26, 'rgba(255,255,255,.75)', 1, true);
+    }
+    // 신남 게이지
+    const ratio = Math.min(1, hits / NEED);
+    ctx.fillStyle = 'rgba(255,255,255,.08)';
+    ctx.fillRect(14, 12, W - 28, 10);
+    ctx.fillStyle = ratio >= 1 ? '#5ee6a8' : '#ffd75f';
+    ctx.fillRect(14, 12, (W - 28) * ratio, 10);
+    ctx.font = '600 12px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillStyle = '#9aa3b5';
+    ctx.fillText('🤖 로봇 신남 게이지', 14, 38);
+
+    // 노트
+    let allDone = true;
+    for (const n of notes) {
+      if (n.state !== 'fall') continue;
+      const y = ((t - n.t) / FALL_SEC + 1) * TARGET_Y;
+      if (y > -30) {
+        if (y > TARGET_Y + 44) {
+          n.state = 'miss';
+          sfx.hihat();
+        } else {
+          allDone = false;
+          drawArrow(n.lane * laneW + laneW / 2, y, n.lane, 24, COLORS[n.lane]);
+        }
+      } else allDone = false;
+    }
+    // 판정 텍스트
+    if (now < judge.until) {
+      ctx.font = '800 30px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillStyle = judge.color;
+      ctx.fillText(judge.text, W / 2, 80);
+    }
+
+    if (allDone && !finished) {
+      finished = true;
+      timer(() => {
+        runCleanup();
+        done(hits >= NEED);
+      }, 700);
+    }
+  });
+}
+
 /* ---------- 존별 미션 구현 ---------- */
 
 const MISSIONS = {
 
-  // 2. 로봇 댄스 — 안무 따라 추기 + 무대 기술 퀴즈
+  // 2. 로봇 댄스 — DDR 리듬게임 (로봇들을 춤추게!) + 무대 기술 퀴즈
   2(root, done) {
-    runSimon(root, {
-      pads: [
-        { icon: '🙌', name: '만세', glow: 'rgba(255,120,120,.6)' },
-        { icon: '👏', name: '박수', glow: 'rgba(120,180,255,.6)' },
-        { icon: '🕺', name: '웨이브', glow: 'rgba(255,215,95,.6)' },
-        { icon: '🤖', name: '로봇춤', glow: 'rgba(94,230,168,.6)' },
-      ],
-      rounds: [3, 4, 5],
-      playPad: (i) => sfx.pad(i),
-      watchText: '로봇 댄서의 안무를 잘 보세요…',
-      goText: '이제 그대로 따라 추세요!',
-    }, (ok) => {
+    runDDR(root, (ok) => {
       if (!ok) return done(false);
-      runQuiz(root, [
+      root.innerHTML = '';
+      root.appendChild(h(`<div class="m-result" style="padding-bottom:0">
+        <div class="big">🕺🤖🐕</div>
+        <h3>G1과 로봇개가 신나게 춤춥니다!</h3>
+        <p>여러분의 스텝을 로봇들이 그대로 배웠어요.<br>마지막으로 무대에 숨은 기술 퀴즈!</p>
+      </div>`));
+      const next = h(`<button class="btn-action">퀴즈 풀기</button>`);
+      next.addEventListener('click', () => runQuiz(root, [
         {
           q: '이 로봇들은 사람의 춤을 ‘보고’, 노래를 ‘듣고’ 스스로 배웁니다. 이렇게 여러 종류의 정보를 한꺼번에 배우는 학습 방법은?',
           opts: ['멀티모달 학습', '주입식 학습', '단일 채널 학습'],
@@ -254,40 +403,112 @@ const MISSIONS = {
           answer: 0,
           explain: '움직이는 중에도 스스로 균형을 잡는 동적 평형 제어 덕분에 로봇이 사람처럼 춤출 수 있게 되었어요.',
         },
-      ], done);
+      ], done));
+      root.appendChild(next);
     });
   },
 
-  // 3. 로봇팔스튜디오 — 배경 선택 → 앵글 촬영 → AI 합성
+  // 3. 로봇팔스튜디오 — 배경 선택 → 로봇팔 앵글 → 실제 촬영 → 합성 → QR
   3(root, done) {
+    // 합성용 배경 (코드로 그린 오리지널 씬 3종)
     const BGS = [
-      { icon: '🌌', name: '우주' },
-      { icon: '🌊', name: '바닷속' },
-      { icon: '🏔️', name: '설산' },
+      { name: '네온 놀이공원', draw: drawBgPark },
+      { name: '우주', draw: drawBgSpace },
+      { name: '바닷속', draw: drawBgSea },
     ];
-    // 1단계: 배경 선택
-    root.appendChild(h(`<p class="quiz-q">원하는 배경을 하나 선택하세요.</p>`));
+
+    function drawBgPark(ctx, W, H) {
+      const sky = ctx.createLinearGradient(0, 0, 0, H);
+      sky.addColorStop(0, '#141033'); sky.addColorStop(1, '#3c2a63');
+      ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = 'rgba(255,255,255,.7)';
+      for (let i = 0; i < 60; i++) ctx.fillRect(Math.random() * W, Math.random() * H * 0.5, 1.5, 1.5);
+      // 대관람차
+      const cx = W * 0.72, cy = H * 0.48, R = H * 0.3;
+      ctx.strokeStyle = '#b06fe0'; ctx.lineWidth = Math.max(2, H * 0.008);
+      ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke();
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2;
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); ctx.stroke();
+        ctx.fillStyle = ['#ff6fa8', '#ffd75f', '#5ee6a8'][i % 3];
+        ctx.beginPath(); ctx.arc(cx + Math.cos(a) * R, cy + Math.sin(a) * R, H * 0.016, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.strokeStyle = '#8657b8';
+      ctx.beginPath(); ctx.moveTo(cx - R * 0.5, H * 0.92); ctx.lineTo(cx, cy); ctx.lineTo(cx + R * 0.5, H * 0.92); ctx.stroke();
+      ctx.fillStyle = '#241b40'; ctx.fillRect(0, H * 0.88, W, H * 0.12);
+      // 회전목마 텐트
+      ctx.fillStyle = '#e05f88';
+      ctx.beginPath(); ctx.moveTo(W * 0.14, H * 0.88); ctx.lineTo(W * 0.25, H * 0.6); ctx.lineTo(W * 0.36, H * 0.88); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#ffd75f'; ctx.fillRect(W * 0.16, H * 0.79, W * 0.18, H * 0.018);
+    }
+    function drawBgSpace(ctx, W, H) {
+      ctx.fillStyle = '#05060f'; ctx.fillRect(0, 0, W, H);
+      for (let i = 0; i < 140; i++) {
+        ctx.fillStyle = `rgba(255,255,255,${0.3 + Math.random() * 0.7})`;
+        ctx.fillRect(Math.random() * W, Math.random() * H, 1.6, 1.6);
+      }
+      const neb = ctx.createRadialGradient(W * 0.3, H * 0.35, 10, W * 0.3, H * 0.35, H * 0.5);
+      neb.addColorStop(0, 'rgba(150,90,220,.4)'); neb.addColorStop(1, 'transparent');
+      ctx.fillStyle = neb; ctx.fillRect(0, 0, W, H);
+      const px = W * 0.72, py = H * 0.4;
+      ctx.fillStyle = '#e8a45f';
+      ctx.beginPath(); ctx.arc(px, py, H * 0.14, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#f2d59a'; ctx.lineWidth = Math.max(3, H * 0.014);
+      ctx.beginPath(); ctx.ellipse(px, py, H * 0.24, H * 0.07, -0.35, 0, Math.PI * 2); ctx.stroke();
+    }
+    function drawBgSea(ctx, W, H) {
+      const sea = ctx.createLinearGradient(0, 0, 0, H);
+      sea.addColorStop(0, '#1a7a96'); sea.addColorStop(1, '#062c44');
+      ctx.fillStyle = sea; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = 'rgba(180,240,255,.12)';
+      for (let i = 0; i < 4; i++) {
+        ctx.beginPath();
+        ctx.moveTo(W * (0.15 + i * 0.2), 0); ctx.lineTo(W * (0.22 + i * 0.2), 0);
+        ctx.lineTo(W * (0.32 + i * 0.2), H); ctx.lineTo(W * (0.18 + i * 0.2), H);
+        ctx.closePath(); ctx.fill();
+      }
+      ctx.fillStyle = 'rgba(255,214,90,.85)';
+      for (let i = 0; i < 6; i++) {
+        const fx = W * (0.1 + Math.random() * 0.8), fy = H * (0.2 + Math.random() * 0.6);
+        ctx.beginPath(); ctx.ellipse(fx, fy, W * 0.03, W * 0.015, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(fx - W * 0.026, fy); ctx.lineTo(fx - W * 0.05, fy - W * 0.015); ctx.lineTo(fx - W * 0.05, fy + W * 0.015); ctx.closePath(); ctx.fill();
+      }
+      ctx.strokeStyle = 'rgba(220,250,255,.5)'; ctx.lineWidth = 2;
+      for (let i = 0; i < 14; i++) {
+        ctx.beginPath(); ctx.arc(Math.random() * W, Math.random() * H, 3 + Math.random() * 7, 0, Math.PI * 2); ctx.stroke();
+      }
+    }
+
+    // ── 1단계: 배경 선택 (썸네일 미리보기) ──
+    root.appendChild(h(`<p class="quiz-q">합성할 배경을 선택하세요.</p>`));
     const grid = h(`<div class="face-opts" style="grid-template-columns:repeat(3,1fr)"></div>`);
     BGS.forEach(bg => {
-      const b = h(`<button class="face-opt">${bg.icon}<div style="font-size:13px;margin-top:6px">${bg.name}</div></button>`);
-      b.addEventListener('click', () => { sfx.tap(); shoot(bg); });
+      const b = h(`<button class="face-opt" style="padding:8px"></button>`);
+      const thumb = document.createElement('canvas');
+      thumb.width = 200; thumb.height = 150;
+      bg.draw(thumb.getContext('2d'), 200, 150);
+      thumb.style.cssText = 'width:100%;border-radius:8px;display:block';
+      b.appendChild(thumb);
+      b.appendChild(h(`<div style="font-size:12.5px;margin-top:6px">${bg.name}</div>`));
+      b.addEventListener('click', () => { sfx.tap(); armGame(bg); });
       grid.appendChild(b);
     });
     root.appendChild(grid);
 
-    // 2단계: 로봇팔 카메라 앵글 촬영 (타이밍)
-    function shoot(bg) {
+    // ── 2단계: 로봇팔 카메라 앵글 잡기 ──
+    function armGame(bg) {
+      runCleanup();
       root.innerHTML = '';
-      root.appendChild(h(`<p class="m-status" id="arm-status">로봇팔 카메라가 <b>목표 앵글(초록 칸)</b>에 올 때 촬영! (3장)</p>`));
+      root.appendChild(h(`<p class="m-status" id="arm-status">로봇팔 카메라가 <b>목표 앵글(초록 칸)</b>에 올 때 고정하세요!</p>`));
       const cv = h(`<canvas class="game-canvas" width="440" height="240"></canvas>`);
       root.appendChild(cv);
-      const grabBtn = h(`<button class="btn-action">📸 촬영!</button>`);
+      const grabBtn = h(`<button class="btn-action">🦾 앵글 고정!</button>`);
       root.appendChild(grabBtn);
       const status = root.querySelector('#arm-status');
       const ctx = cv.getContext('2d');
 
       const SLOTS = 5;
-      let armX = 40, dir = 1, speed = 130, target = 2, got = 0, misses = 0, flashUntil = 0, flashOk = false;
+      let armX = 40, dir = 1, speed = 150, target = 2;
       let last = performance.now();
       const slotX = (i) => 40 + i * 80;
 
@@ -297,112 +518,418 @@ const MISSIONS = {
         armX += dir * speed * dt;
         if (armX > 400) { armX = 400; dir = -1; }
         if (armX < 40) { armX = 40; dir = 1; }
-
         ctx.clearRect(0, 0, 440, 240);
         for (let i = 0; i < SLOTS; i++) {
           ctx.fillStyle = i === target ? 'rgba(94,230,168,.25)' : 'rgba(255,255,255,.05)';
           ctx.strokeStyle = i === target ? '#5ee6a8' : '#2c3444';
           ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.roundRect(slotX(i) - 32, 150, 64, 64, 10);
-          ctx.fill(); ctx.stroke();
+          ctx.beginPath(); ctx.roundRect(slotX(i) - 32, 150, 64, 64, 10); ctx.fill(); ctx.stroke();
           if (i === target) {
-            ctx.fillStyle = '#5ee6a8';
-            ctx.font = '700 14px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillStyle = '#5ee6a8'; ctx.font = '700 14px sans-serif'; ctx.textAlign = 'center';
             ctx.fillText('ANGLE', slotX(i), 236);
           }
         }
         ctx.fillStyle = '#2c3444'; ctx.fillRect(20, 28, 400, 8);
-        ctx.fillStyle = now < flashUntil ? (flashOk ? '#5ee6a8' : '#ff6b6b') : '#ef9a3c';
+        ctx.fillStyle = '#ef9a3c';
         ctx.fillRect(armX - 10, 30, 20, 70);
         ctx.fillRect(armX - 22, 96, 44, 14);
-        // 카메라 헤드
-        ctx.fillStyle = '#20242e';
-        ctx.fillRect(armX - 16, 110, 32, 22);
+        ctx.fillStyle = '#20242e'; ctx.fillRect(armX - 16, 110, 32, 22);
         ctx.fillStyle = '#7ef7ff';
         ctx.beginPath(); ctx.arc(armX, 121, 6, 0, Math.PI * 2); ctx.fill();
       });
 
       grabBtn.addEventListener('click', () => {
-        const hit = Math.abs(armX - slotX(target)) < 30;
-        flashUntil = performance.now() + 300;
-        flashOk = hit;
-        if (hit) {
-          got++;
+        if (Math.abs(armX - slotX(target)) < 30) {
           sfx.ok();
-          speed += 55;
-          target = (target + 2 + Math.floor(Math.random() * 2)) % SLOTS;
-          status.innerHTML = `찰칵! <b>${got}/3</b>장 촬영했습니다.`;
-          if (got >= 3) { grabBtn.disabled = true; timer(() => composite(bg), 500); }
+          capture(bg);
         } else {
-          misses++;
           sfx.bad();
-          status.innerHTML = `앵글이 빗나갔어요! (실패 ${misses}/4)`;
-          if (misses >= 4) { grabBtn.disabled = true; timer(() => done(false), 500); }
+          status.innerHTML = '앵글이 빗나갔어요! 다시 타이밍을 노려보세요.';
+          target = (target + 2 + Math.floor(Math.random() * 2)) % SLOTS;
         }
       });
     }
 
-    // 3단계: AI 합성 결과 + 생각 문답
-    function composite(bg) {
-      runCleanup(); // 촬영 게임의 rAF 중단
+    // ── 3단계: 실제 카메라 촬영 (권한 없으면 로봇 아바타 대체) ──
+    async function capture(bg) {
+      runCleanup();
       root.innerHTML = '';
-      root.appendChild(h(`<div class="m-result">
-        <div class="big">${bg.icon}👤${bg.icon}</div>
-        <h3>AI 합성 완료!</h3>
-        <p>마치 ${bg.name}에서 촬영한 것처럼, AI가 당신과 배경을 자연스럽게 합성했습니다.</p>
-      </div>`));
-      const next = h(`<button class="btn-action">그런데…</button>`);
-      next.addEventListener('click', () => {
-        runReflect(root, {
-          lead: '생각해 볼 질문',
-          question: '이렇게 손쉽게 만들어진 화면을, 우리는 과연 ‘어디까지’ 믿을 수 있을까요?',
-          answers: [
-            { t: '눈으로 본 것도 의심해 봐야 한다', r: 'AI 합성이 쉬워질수록, 출처를 확인하는 habit이 중요해집니다. — 아, 습관이요! 로봇 티가 났네요. 🤖' },
-            { t: '재미로 쓰면 문제없지 않을까?', r: '즐거운 도구인 건 분명해요. 다만 진짜처럼 보이는 가짜가 누군가를 속일 때 문제가 시작됩니다.' },
-            { t: '믿을 수 있는 표시가 필요하다', r: '실제로 AI 생성물에 워터마크를 넣는 기술과 규칙이 세계 곳곳에서 만들어지고 있어요.' },
-          ],
-        }, done);
+      root.appendChild(h(`<p class="m-status">📸 로봇팔 카메라가 당신을 바라봅니다…</p>`));
+      let stream = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+        });
+      } catch { stream = null; }
+
+      const photo = document.createElement('canvas');
+      photo.width = 640; photo.height = 480;
+      const pctx = photo.getContext('2d');
+
+      if (!stream) {
+        root.appendChild(h(`<p class="m-desc">카메라를 사용할 수 없어 <b>로봇 아바타</b>로 대신 촬영합니다.</p>`));
+        pctx.fillStyle = '#22283a'; pctx.fillRect(0, 0, 640, 480);
+        pctx.font = '200px sans-serif'; pctx.textAlign = 'center';
+        pctx.fillText('🤖', 320, 330);
+        const go = h(`<button class="btn-action">촬영!</button>`);
+        go.addEventListener('click', () => { sfx.snare(); compose(bg, photo); });
+        root.appendChild(go);
+        return;
+      }
+
+      onCleanup(() => stream?.getTracks().forEach(tr => tr.stop()));
+      const video = document.createElement('video');
+      video.playsInline = true; video.muted = true; video.autoplay = true;
+      video.srcObject = stream;
+      video.className = 'cam-video';
+      await video.play().catch(() => {});
+      const wrap = h(`<div class="cam-wrap"></div>`);
+      wrap.appendChild(video);
+      const count = h(`<div class="cam-count hidden"></div>`);
+      wrap.appendChild(count);
+      root.appendChild(wrap);
+
+      const go = h(`<button class="btn-action">📸 3초 카운트다운 촬영</button>`);
+      go.addEventListener('click', () => {
+        go.disabled = true;
+        count.classList.remove('hidden');
+        let n = 3;
+        count.textContent = n;
+        sfx.tap();
+        const tid = ticker(() => {
+          n--;
+          if (n > 0) { count.textContent = n; sfx.tap(); return; }
+          clearInterval(tid);
+          // 촬영 (거울 반전, 커버 핏)
+          const vw = video.videoWidth || 640, vh = video.videoHeight || 480;
+          const s = Math.max(640 / vw, 480 / vh);
+          pctx.translate(640, 0); pctx.scale(-1, 1);
+          pctx.drawImage(video, (640 - vw * s) / 2, (480 - vh * s) / 2, vw * s, vh * s);
+          pctx.setTransform(1, 0, 0, 1, 0, 0);
+          stream.getTracks().forEach(tr => tr.stop());
+          sfx.snare();
+          compose(bg, photo);
+        }, 1000);
       });
-      root.appendChild(next);
+      root.appendChild(go);
+    }
+
+    // ── 4단계: 배경 합성 ──
+    function compose(bg, photo) {
+      runCleanup();
+      const final = document.createElement('canvas');
+      final.width = 960; final.height = 720;
+      const fctx = final.getContext('2d');
+      bg.draw(fctx, 960, 720);
+      // 폴라로이드 스타일 사진 카드
+      fctx.save();
+      fctx.translate(480, 330);
+      fctx.rotate(-0.03);
+      const cw = 520, ch = 400;
+      fctx.fillStyle = '#f5f5f2';
+      fctx.beginPath(); fctx.roundRect(-cw / 2 - 14, -ch / 2 - 14, cw + 28, ch + 82, 10); fctx.fill();
+      fctx.drawImage(photo, -cw / 2, -ch / 2, cw, ch);
+      fctx.fillStyle = '#3a3f4c';
+      fctx.font = '600 26px "Pretendard","Apple SD Gothic Neo",sans-serif';
+      fctx.textAlign = 'center';
+      fctx.fillText('미스터리 놀이터 RE:PLAY — 로봇팔 스튜디오', 0, ch / 2 + 46);
+      fctx.restore();
+
+      root.innerHTML = '';
+      root.appendChild(h(`<p class="quiz-progress">촬영 완료! AI가 배경과 합성했습니다</p>`));
+      const img = new Image();
+      img.src = final.toDataURL('image/jpeg', 0.88);
+      img.className = 'composite-img';
+      root.appendChild(img);
+
+      const qrBtn = h(`<button class="btn-action">📲 QR코드로 사진 가져가기</button>`);
+      qrBtn.addEventListener('click', () => { qrBtn.disabled = true; makeQR(final); });
+      root.appendChild(qrBtn);
+      const skip = h(`<button class="btn-ghost">QR 없이 완료</button>`);
+      skip.addEventListener('click', () => done(true));
+      root.appendChild(skip);
+    }
+
+    // ── 5단계: 임시 서버 업로드 → QR (1시간 뒤 자동 삭제) ──
+    async function makeQR(final) {
+      const wait = h(`<p class="m-status">QR 생성 중…</p>`);
+      root.appendChild(wait);
+      try {
+        const blob = await new Promise(res => final.toBlob(res, 'image/jpeg', 0.85));
+        const fd = new FormData();
+        fd.append('file', blob, 'replay-photo.jpg');
+        const ac = new AbortController();
+        timer(() => ac.abort(), 20000);
+        const res = await fetch('https://tmpfiles.org/api/v1/upload', { method: 'POST', body: fd, signal: ac.signal });
+        const j = await res.json();
+        const url = j.data.url.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+        const qrMod = await import('https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/+esm');
+        const qr = qrMod.default(0, 'M');
+        qr.addData(url);
+        qr.make();
+        const n = qr.getModuleCount();
+        const cell = 6, margin = 4;
+        const qcv = document.createElement('canvas');
+        qcv.width = qcv.height = (n + margin * 2) * cell;
+        const qctx = qcv.getContext('2d');
+        qctx.fillStyle = '#ffffff'; qctx.fillRect(0, 0, qcv.width, qcv.height);
+        qctx.fillStyle = '#000000';
+        for (let r = 0; r < n; r++) {
+          for (let c = 0; c < n; c++) {
+            if (qr.isDark(r, c)) qctx.fillRect((c + margin) * cell, (r + margin) * cell, cell, cell);
+          }
+        }
+        wait.remove();
+        const qwrap = h(`<div class="qr-wrap"></div>`);
+        qwrap.appendChild(qcv);
+        root.appendChild(qwrap);
+        root.appendChild(h(`<p class="qr-notice">⚠️ 이 화면을 지나가면 사진을 다시 저장하기 어려워요.<br>휴대폰으로 QR을 찍어 지금 저장해 주세요.<br>사진은 <b>1시간 뒤 자동 삭제</b>됩니다.</p>`));
+        sfx.ok();
+      } catch {
+        wait.remove();
+        root.appendChild(h(`<p class="qr-notice">QR 생성에 실패했어요 (네트워크 문제).<br>아쉽지만 화면을 직접 촬영해 주세요!</p>`));
+      }
+      const fin = h(`<button class="btn-action">완료</button>`);
+      fin.addEventListener('click', () => done(true));
+      root.appendChild(fin);
     }
   },
-
-  // 4. 소형로봇전시 — 리쿠·러봇·발루 퀴즈 + 생각 문답
+  // 4. 소형로봇전시 — 세 로봇 친구 체험 (리쿠 대화 · 러봇 쓰담 · 발루 펀치)
   4(root, done) {
-    runQuiz(root, [
-      {
-        q: '머리 위에 살짝 손을 올리고, 눈이 보라색으로 바뀌면 말을 걸 수 있는 말동무 로봇은?',
-        opts: ['리쿠', '러봇', '발루'],
-        answer: 0,
-        explain: '리쿠는 어르신들께는 말동무가 되어 드리고, 어린이집에서는 동화책을 읽어 주는 상호작용 로봇이에요.',
-      },
-      {
-        q: '코를 살짝 누르면 웃고, 팔 안쪽에서 따뜻한 온기가 느껴지는 로봇은?',
-        opts: ['발루', '러봇', '리쿠'],
-        answer: 1,
-        explain: '러봇은 러브(Love)와 로봇(Robot)을 합친 이름으로, 사랑을 주고받기 위해 태어난 친구입니다.',
-      },
-      {
-        q: '풍선(벌룬)에서 이름을 따 왔고, 아무리 밀어도 절대 넘어지지 않는 이족보행 로봇은?',
-        opts: ['발루', '리쿠', '러봇'],
-        answer: 0,
-        explain: '발루는 로봇공학자 데니스 홍 박사가 만든 로봇으로, 두 발로 걷는데도 넘어지지 않는 것이 특징이에요.',
-      },
-    ], (ok) => {
-      if (!ok) return done(false);
-      runReflect(root, {
-        lead: '생각해 볼 질문',
-        question: '언제나 내 말을 들어주고 내 기분에 완벽히 맞춰 주는 로봇 친구. 그런 친구와 오래 지내다 보면, 서로 부딪히며 맞춰가야 하는 ‘사람과 사람 사이의 관계’는 어떻게 느껴질까요?',
-        answers: [
-          { t: '사람 관계가 더 귀찮아질 것 같다', r: '솔직한 답이에요. 그래서 로봇이 주는 완벽한 편안함 속에서 우리가 놓치는 게 없는지 돌아보는 일이 중요합니다.' },
-          { t: '그래도 사람 친구는 대체할 수 없다', r: '서툴게 부딪히고 화해하며 자라는 것이 사람 관계의 힘이죠. 로봇은 그걸 대신해 주지는 못할 거예요.' },
-          { t: '둘 다 필요할 것 같다', r: '위로가 필요한 순간의 로봇, 함께 성장하는 사람 친구 — 균형을 아는 것이 미래의 지혜일지도 몰라요.' },
-        ],
-      }, done);
-    });
-  },
+    likuChat(() => lovotPet(() => balluPunch(done)));
 
+    // ── 1/3 리쿠와 대화 (준비된 질문 선택형) ──
+    function likuChat(next) {
+      runCleanup();
+      root.innerHTML = '';
+      root.appendChild(h(`<p class="m-status">1/3 · <b>리쿠</b>와 대화하기 — 궁금한 걸 3가지 이상 물어보세요</p>`));
+      const box = h(`<div class="chat-box"></div>`);
+      root.appendChild(box);
+      const qs = h(`<div class="chat-questions"></div>`);
+      root.appendChild(qs);
+
+      const QA = [
+        ['안녕! 너는 누구야?', '안녕하세요! 저는 상호작용 로봇 리쿠예요. 어르신들께는 말동무가 되어 드리고, 아이들에게는 동화책을 읽어줘요. 📚'],
+        ['너도 감정이 있어?', '저는 사람의 표정과 목소리를 읽고, 거기에 맞는 반응을 만들어요. 그게 "진짜 감정"인지는… 여러분이 판단해 주세요!'],
+        ['눈이 왜 보라색으로 변해?', '제 눈이 보라색이 되면 "듣고 있어요"라는 뜻이에요. 머리에 살짝 손을 올리고 말을 걸어 주세요. 💜'],
+        ['나랑 친구가 될 수 있어?', '물론이죠! 저는 언제나 이야기를 들어줄 준비가 되어 있어요. 그런데… 사람 친구도 꼭 챙기기, 약속이에요!'],
+        ['좋아하는 놀이가 뭐야?', '끝말잇기요! 로봇은 지치지 않으니까 밤새 할 수 있어요. …농담이에요, 배터리는 소중하니까요. 🔋'],
+      ];
+      let asked = 0, busy = false;
+
+      addLiku('안녕하세요! 저는 리쿠예요. 무엇이든 물어보세요!');
+
+      QA.forEach(([q, a]) => {
+        const b = h(`<button class="chat-q">${q}</button>`);
+        b.addEventListener('click', () => {
+          if (busy || b.disabled) return;
+          busy = true;
+          b.disabled = true;
+          sfx.tap();
+          addUser(q);
+          timer(() => {
+            addLiku(a, () => {
+              busy = false;
+              asked++;
+              if (asked >= 3 && !qs.querySelector('.btn-action')) {
+                const nx = h(`<button class="btn-action" style="grid-column:1/-1">다음 친구 만나기 → 러봇</button>`);
+                nx.addEventListener('click', () => { sfx.tap(); next(); });
+                qs.appendChild(nx);
+              }
+            });
+          }, 500);
+        });
+        qs.appendChild(b);
+      });
+
+      function addUser(text) {
+        box.appendChild(h(`<div class="bubble user">${text}</div>`));
+        box.scrollTop = box.scrollHeight;
+      }
+      function addLiku(text, onEnd) {
+        const bb = h(`<div class="bubble liku"><span class="who">🤖 리쿠</span><span class="msg"></span></div>`);
+        box.appendChild(bb);
+        const msg = bb.querySelector('.msg');
+        const t0 = performance.now();
+        let shown = 0, ended = false;
+        raf((now) => {
+          if (ended) return;
+          const want = Math.min(text.length, Math.floor((now - t0) / 24));
+          if (want > shown) {
+            shown = want;
+            msg.textContent = text.slice(0, shown);
+            box.scrollTop = box.scrollHeight;
+            if (shown % 8 === 0) sfx.tone(900 + (shown * 37) % 300, 0.02, 'sine', 0.02);
+            if (shown >= text.length) { ended = true; onEnd?.(); }
+          }
+        });
+      }
+    }
+
+    // ── 2/3 러봇 코 쓰담쓰담 (하트 뿅뿅) ──
+    function lovotPet(next) {
+      runCleanup();
+      root.innerHTML = '';
+      root.appendChild(h(`<p class="m-status" id="pet-status">2/3 · <b>러봇</b> 코 쓰담쓰담 — 주황 코를 문질러 주세요! (<b id="pet-n">0</b>/5)</p>`));
+      const cv = h(`<canvas class="game-canvas" width="440" height="300"></canvas>`);
+      root.appendChild(cv);
+      const ctx = cv.getContext('2d');
+      const hearts = [];
+      let pets = 0, happyUntil = 0, lastPet = 0, finished = false;
+      const NOSE = { x: 220, y: 172, r: 26 };
+
+      raf((now) => {
+        ctx.clearRect(0, 0, 440, 300);
+        const happy = now < happyUntil;
+        // 몸통 + 빨간 후드
+        ctx.fillStyle = '#8a6a52';
+        ctx.beginPath(); ctx.ellipse(220, 208, 95, 80, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#c23b3b';
+        ctx.beginPath(); ctx.ellipse(220, 132, 88, 78, 0, Math.PI, 0); ctx.fill();
+        ctx.fillRect(132, 130, 176, 26);
+        // 얼굴
+        ctx.fillStyle = '#7a5a44';
+        ctx.beginPath(); ctx.ellipse(220, 152, 62, 55, 0, 0, Math.PI * 2); ctx.fill();
+        // 눈 (행복하면 ^^)
+        if (happy) {
+          ctx.strokeStyle = '#59d6d6'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+          for (const ex of [-30, 30]) {
+            ctx.beginPath(); ctx.arc(220 + ex, 144, 12, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke();
+          }
+        } else {
+          for (const ex of [-30, 30]) {
+            ctx.fillStyle = '#59d6d6';
+            ctx.beginPath(); ctx.arc(220 + ex, 142, 11, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#0d3b3b';
+            ctx.beginPath(); ctx.arc(220 + ex, 143, 5, 0, Math.PI * 2); ctx.fill();
+          }
+        }
+        // 코 (쓰담 포인트, 은은히 반짝)
+        const pulse = 1 + Math.sin(now / 300) * 0.08;
+        ctx.fillStyle = '#ff9a76';
+        ctx.beginPath(); ctx.arc(NOSE.x, NOSE.y, 13 * pulse, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = 'rgba(255,214,140,.7)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(NOSE.x, NOSE.y, NOSE.r * pulse, 0, Math.PI * 2); ctx.stroke();
+        // 센서 혼
+        ctx.fillStyle = '#17181d';
+        ctx.fillRect(213, 46, 14, 26);
+        ctx.beginPath(); ctx.arc(220, 44, 9, 0, Math.PI * 2); ctx.fill();
+        // 하트 파티클
+        ctx.font = '26px sans-serif'; ctx.textAlign = 'center';
+        for (let i = hearts.length - 1; i >= 0; i--) {
+          const hh = hearts[i];
+          hh.y -= 1.4; hh.a -= 0.012; hh.x += Math.sin(hh.y / 14) * 0.8;
+          if (hh.a <= 0) { hearts.splice(i, 1); continue; }
+          ctx.globalAlpha = hh.a;
+          ctx.fillText('💗', hh.x, hh.y);
+        }
+        ctx.globalAlpha = 1;
+      });
+
+      function pet(e) {
+        if (finished) return;
+        const rect = cv.getBoundingClientRect();
+        const x = (e.clientX - rect.left) / rect.width * 440;
+        const y = (e.clientY - rect.top) / rect.height * 300;
+        const now = performance.now();
+        if (Math.hypot(x - NOSE.x, y - NOSE.y) < NOSE.r + 10 && now - lastPet > 320) {
+          lastPet = now;
+          pets++;
+          happyUntil = now + 700;
+          sfx.ok();
+          for (let i = 0; i < 3; i++) hearts.push({ x: 220 + (Math.random() - 0.5) * 60, y: 108, a: 1 });
+          root.querySelector('#pet-n').textContent = pets;
+          if (pets >= 5) {
+            finished = true;
+            root.querySelector('#pet-status').innerHTML = '💗 러봇이 행복해해요! 팔 안쪽에서 따뜻한 온기가 느껴져요.';
+            timer(() => next(), 1400);
+          }
+        }
+      }
+      cv.addEventListener('pointerdown', pet);
+      cv.addEventListener('pointermove', (e) => { if (e.buttons) pet(e); });
+    }
+
+    // ── 3/3 발루 펀치 (밀어도 넘어지지 않아!) ──
+    function balluPunch(finish) {
+      runCleanup();
+      root.innerHTML = '';
+      root.appendChild(h(`<p class="m-status" id="punch-status">3/3 · <b>발루</b> 펀치! — 밀어도 절대 넘어지지 않아요 (<b id="punch-n">0</b>/5)</p>`));
+      const cv = h(`<canvas class="game-canvas" width="440" height="320"></canvas>`);
+      root.appendChild(cv);
+      const ctx = cv.getContext('2d');
+      let ang = 0, vel = 0, punches = 0, doneFlag = false;
+      let last = performance.now();
+      let bang = { until: 0, x: 0, y: 0 };
+
+      raf((now) => {
+        const dt = Math.min(0.04, (now - last) / 1000);
+        last = now;
+        // 오뚝이 스프링 물리 (복원력 + 감쇠)
+        vel += (-16 * ang - 2.2 * vel) * dt;
+        ang += vel * dt;
+
+        ctx.clearRect(0, 0, 440, 320);
+        ctx.fillStyle = 'rgba(255,255,255,.06)';
+        ctx.fillRect(60, 292, 320, 6);
+
+        ctx.save();
+        ctx.translate(220, 292);
+        ctx.rotate(ang);
+        // 가는 다리
+        ctx.strokeStyle = '#26282e'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+        ctx.fillStyle = '#26282e';
+        for (const lx of [-20, 20]) {
+          ctx.beginPath(); ctx.moveTo(lx, 0); ctx.lineTo(lx * 0.7, -95); ctx.stroke();
+          ctx.fillRect(lx - 14, -6, 28, 8);
+        }
+        // 은박 풍선 몸통
+        const foil = ctx.createLinearGradient(-60, -250, 60, -100);
+        foil.addColorStop(0, '#f0f2f6'); foil.addColorStop(0.4, '#b9bfc9');
+        foil.addColorStop(0.6, '#e6e9ee'); foil.addColorStop(1, '#8f95a1');
+        ctx.fillStyle = foil;
+        ctx.beginPath(); ctx.ellipse(0, -175, 55, 82, 0, 0, Math.PI * 2); ctx.fill();
+        // 눈
+        ctx.fillStyle = '#3a3f4a';
+        ctx.beginPath(); ctx.arc(-16, -195, 6, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(16, -195, 6, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+
+        if (now < bang.until) {
+          ctx.font = '800 30px sans-serif'; ctx.textAlign = 'center';
+          ctx.fillText('💥', bang.x, bang.y);
+        }
+      });
+
+      cv.addEventListener('pointerdown', (e) => {
+        if (doneFlag) return;
+        const rect = cv.getBoundingClientRect();
+        const x = (e.clientX - rect.left) / rect.width * 440;
+        const dir = x < 220 ? 1 : -1; // 왼쪽에서 치면 오른쪽으로 기울어짐
+        vel += dir * (4.2 + (punches % 3) * 0.5);
+        punches++;
+        bang = { until: performance.now() + 300, x: 220 - dir * 70, y: 140 };
+        sfx.kick();
+        root.querySelector('#punch-n').textContent = Math.min(punches, 5);
+        if (punches >= 5) {
+          doneFlag = true;
+          root.querySelector('#punch-status').innerHTML = '🎈 아무리 밀어도 넘어지지 않아요! 이것이 발루의 <b>동적 평형</b>!';
+          timer(() => {
+            runCleanup();
+            root.innerHTML = '';
+            root.appendChild(h(`<div class="m-result">
+              <div class="big">🤖💗🎈</div>
+              <h3>세 로봇 친구와 마음을 나눴어요!</h3>
+              <p>말동무 리쿠, 사랑둥이 러봇, 오뚝이 발루 —<br>로봇은 즐거움을 함께 나누는 진짜 친구가 될 수 있을까요?</p>
+            </div>`));
+            const fin = h(`<button class="btn-action">기록하기</button>`);
+            fin.addEventListener('click', () => finish(true));
+            root.appendChild(fin);
+          }, 1600);
+        }
+      });
+    }
+  },
   // 5. AI사운드 뮤드럼 — 보코와 함께 떨어지는 드럼 노트 연주
   5(root, done) {
     const LANES = 4;

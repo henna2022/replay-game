@@ -4,15 +4,13 @@
 // assets/videos/passage.mp4 · outro.mp4 파일이 있으면 영상을 우선 재생.
 import { sfx } from './audio.js';
 
-// ---- 나레이션 (기획 대본 기반) ----
+// ---- 나레이션 (기획팀 통로 멘트) ----
 const PASSAGE_CAPTIONS = [
-  { t: 0.5, text: '안녕하세요, 서울로봇인공지능과학관에\n오신 여러분 환영합니다.' },
-  { t: 4.0, text: '이번 전시의 주제는 ‘엔터테크’ —\n엔터테인먼트와 기술이 합쳐진 말입니다.' },
-  { t: 7.6, text: '지금 서 있는 이 공간은\n현실 세계와 로봇의 세계를 이어 주는 통로입니다.' },
-  { t: 12.3, text: '전시장 곳곳에 10가지 미션이 숨겨져 있습니다.' },
-  { t: 15.2, text: '모든 미션을 완수하고 ‘황금 열쇠’를 얻으면\n현실로 귀환할 수 있습니다.' },
-  { t: 18.0, text: '그럼 이제, 로봇의 세상으로\n함께 이동해 보겠습니다.' },
-  { t: 21.7, text: '“기술은 인간의 놀이 문화를 어떻게 바꿀까?”\n오늘, 여러분만의 답을 찾아보세요.' },
+  { t: 0.6, text: '미스터리 놀이터 「RE:PLAY」\n엔터테크, 인간의 놀이를 새롭게 하다' },
+  { t: 5.0, text: '이곳은 인간의 세계와 로봇의 세계를\n이어주는 통로입니다.' },
+  { t: 9.6, text: '여러분은 10가지 미션을 수행하면서\n황금열쇠를 찾아보세요.' },
+  { t: 13.8, text: '그리고 인공지능 기술이 어떻게 우리의\n놀이문화를 바꿀지 상상해보세요.' },
+  { t: 18.4, text: '그럼, 로봇의 세상으로 이동합니다!' },
 ];
 const PASSAGE_END = 25.0;
 // 페이즈 경계(초): 낮→점등 / 포털 개방 / 흡입 / 도착
@@ -165,6 +163,14 @@ function runJourney(stage, root) {
   const trees = Array.from({ length: 6 }, (_, i) => ({
     x: i / 6 + Math.random() * 0.1, r: 0.03 + Math.random() * 0.035,
   }));
+  // 잔디밭 피크닉 (낮 장면: 돗자리 + 사람 실루엣)
+  const picnics = Array.from({ length: 5 }, (_, i) => ({
+    x: 0.07 + i * 0.19 + Math.random() * 0.05,
+    y: 0.845 + Math.random() * 0.09,
+    w: 0.055 + Math.random() * 0.03,
+    col: ['#d9744f', '#5d8fc9', '#c9b04f', '#b06fb8', '#d95f74'][i],
+    ppl: 2 + (i % 2),
+  }));
   const warpStars = Array.from({ length: 90 }, () => ({
     a: Math.random() * Math.PI * 2, d: 0.05 + Math.random() * 0.95, tw: Math.random(),
   }));
@@ -179,6 +185,7 @@ function runJourney(stage, root) {
   let alive = true;
   let rafId = 0;
   let capIdx = -1;
+  let capShown = 0;
   const start0 = performance.now();
 
   cleanup = () => {
@@ -233,34 +240,49 @@ function runJourney(stage, root) {
     drawSkyline(backCity, W, H, horizon, t, night, mix(BLD_DAY, BLD_NGT, night), 0.86, 0.75);
     drawSkyline(frontCity, W, H, horizon, t, night, mix(BLD_DAY_F, BLD_NGT_F, night), 1.0, 1.0);
 
-    // 수면/공원 (지평선 아래)
-    const water = ctx.createLinearGradient(0, horizon, 0, H);
-    water.addColorStop(0, rgb(mix([70, 96, 118], [6, 9, 20], night)));
-    water.addColorStop(1, rgb(mix([46, 66, 84], [3, 5, 12], night)));
-    ctx.fillStyle = water;
+    // 잔디밭 (지평선 아래 — 피크닉 공원)
+    const lawn = ctx.createLinearGradient(0, horizon, 0, H);
+    lawn.addColorStop(0, rgb(mix([98, 148, 80], [12, 20, 14], night)));
+    lawn.addColorStop(1, rgb(mix([60, 104, 52], [5, 9, 6], night)));
+    ctx.fillStyle = lawn;
     ctx.fillRect(0, horizon, W, H - horizon);
 
-    // 불빛 반사 (밤)
-    if (night > 0.45) {
-      const ra = (night - 0.45) / 0.55;
+    // 포털 빛이 잔디에 비침
+    if (open > 0.15 && night > 0.4) {
+      const g2 = ctx.createLinearGradient(0, horizon, 0, H);
+      g2.addColorStop(0, `rgba(150,190,255,${0.2 * open})`);
+      g2.addColorStop(1, 'transparent');
+      ctx.fillStyle = g2;
+      ctx.fillRect(W * 0.28, horizon, W * 0.44, H - horizon);
+    }
+
+    // 피크닉을 즐기는 사람들 (밤이 되면 하나둘 떠남)
+    const pa = 1 - clamp01(night * 1.7 - 0.25);
+    if (pa > 0) {
       ctx.save();
-      ctx.globalAlpha = 0.16 * ra;
-      for (const b of frontCity) {
-        if (b.wins.length < 4) continue;
-        const bx = b.x * W + b.w * W * 0.5;
-        const g = ctx.createLinearGradient(0, horizon, 0, horizon + H * 0.12);
-        g.addColorStop(0, '#ffd98a');
-        g.addColorStop(1, 'transparent');
-        ctx.fillStyle = g;
-        ctx.fillRect(bx - b.w * W * 0.3, horizon, b.w * W * 0.6, H * 0.12);
-      }
-      // 포털 반사
-      if (open > 0.15) {
-        const g2 = ctx.createLinearGradient(0, horizon, 0, H);
-        g2.addColorStop(0, `rgba(150,190,255,${0.22 * open})`);
-        g2.addColorStop(1, 'transparent');
-        ctx.fillStyle = g2;
-        ctx.fillRect(W * 0.3, horizon, W * 0.4, H - horizon);
+      ctx.globalAlpha = pa;
+      for (const p of picnics) {
+        const px = p.x * W, py = p.y * H;
+        const pw = p.w * W, ph = pw * 0.45;
+        // 돗자리
+        ctx.fillStyle = p.col;
+        ctx.globalAlpha = pa * 0.75;
+        ctx.beginPath();
+        ctx.ellipse(px, py, pw * 0.62, ph * 0.55, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // 앉아있는 사람 실루엣
+        ctx.globalAlpha = pa;
+        ctx.fillStyle = rgb(mix([52, 58, 66], [20, 24, 30], night));
+        for (let k = 0; k < p.ppl; k++) {
+          const ox = px + (k - (p.ppl - 1) / 2) * pw * 0.34;
+          const bodyH = ph * 0.85;
+          ctx.beginPath();
+          ctx.ellipse(ox, py - bodyH * 0.4, bodyH * 0.32, bodyH * 0.5, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(ox, py - bodyH * 0.98, bodyH * 0.22, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
       ctx.restore();
     }
@@ -410,18 +432,26 @@ function runJourney(stage, root) {
     if (stage.dir === 1) drawPassageFrame(W, H, t);
     else drawOutroFrame(W, H, t);
 
-    // 자막
+    // 자막 (영화 자막처럼 타자기 효과로 슈슈슉)
     let idx = -1;
     for (let i = 0; i < stage.captions.length; i++) {
       if (t >= stage.captions[i].t) idx = i;
     }
     if (idx !== capIdx && idx >= 0) {
       capIdx = idx;
-      caption.innerHTML = stage.captions[idx].text.replaceAll('\n', '<br>');
+      capShown = 0;
       caption.classList.remove('cap-in');
       void caption.offsetWidth;
       caption.classList.add('cap-in');
-      sfx.tap();
+    }
+    if (capIdx >= 0) {
+      const cap = stage.captions[capIdx];
+      const want = Math.min(cap.text.length, Math.floor((t - cap.t) / 0.032));
+      if (want > capShown) {
+        capShown = want;
+        caption.innerHTML = cap.text.slice(0, capShown).replaceAll('\n', '<br>');
+        if (capShown % 4 === 1) sfx.tone(1500, 0.018, 'square', 0.025); // 슉슉 틱
+      }
     }
 
     if (t >= stage.end) stop();

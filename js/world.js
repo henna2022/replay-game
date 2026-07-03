@@ -1,9 +1,33 @@
 // ===== RE:PLAY 전시홀 + 벽 구조 + 실사 기반 전시물 =====
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { ZONES, HALL_RADIUS, WALLS, FACILITY } from './config.js';
 
 const texLoader = new THREE.TextureLoader();
+const gltfLoader = new GLTFLoader();
+gltfLoader.setMeshoptDecoder(MeshoptDecoder);
+
+// GLB 모델 슬롯: 파일이 있으면 절차 생성 모델을 실제 3D 모델로 교체
+// 높이(height)에 맞춰 스케일·바닥을 정렬하고, hide 목록의 절차 모델을 숨김
+function loadModelSlot(parent, path, { height = 1.5, x = 0, y = 0, z = 0, ry = 0, hide = [], onLoad } = {}) {
+  gltfLoader.load(path, (gltf) => {
+    const model = gltf.scene;
+    const bbox = new THREE.Box3().setFromObject(model);
+    const size = new THREE.Vector3(); bbox.getSize(size);
+    model.scale.setScalar(height / (size.y || 1));
+    bbox.setFromObject(model);
+    const center = new THREE.Vector3(); bbox.getCenter(center);
+    model.position.set(-center.x, -bbox.min.y, -center.z);
+    const wrap = new THREE.Group();
+    wrap.add(model);
+    wrap.position.set(x, y, z);
+    wrap.rotation.y = ry;
+    for (const o of hide) o.visible = false;
+    parent.add(wrap);
+    onLoad?.(wrap);
+  }, undefined, () => {}); // 파일 없으면 절차 생성 모델 유지
+}
 
 const WALL_HEIGHT = 3.2;
 const WALL_THICK = 0.35;
@@ -316,29 +340,6 @@ const builders = {
     strapL.position.set(-0.17, 2.3, 0); strapL.rotation.z = 0.07; g.add(strapL);
     const strapR = strapL.clone(); strapR.position.x = 0.17; strapR.rotation.z = -0.07; g.add(strapR);
 
-    // ── 실제 3D 모델 슬롯: assets/models/robot-dance.glb 가 있으면 자동 교체 ──
-    let mixer = null;
-    let glbModel = null;
-    new GLTFLoader().load('assets/models/robot-dance.glb', (gltf) => {
-      const model = gltf.scene;
-      const bbox = new THREE.Box3().setFromObject(model);
-      const size = new THREE.Vector3(); bbox.getSize(size);
-      model.scale.setScalar(1.6 / (size.y || 1));
-      bbox.setFromObject(model);
-      const center = new THREE.Vector3(); bbox.getCenter(center);
-      model.position.x -= center.x;
-      model.position.z -= center.z;
-      model.position.y -= bbox.min.y - 0.03;
-      robot.visible = false;
-      g.add(model);
-      if (gltf.animations && gltf.animations.length) {
-        mixer = new THREE.AnimationMixer(model);
-        mixer.clipAction(gltf.animations[0]).play();
-      } else {
-        glbModel = model;
-      }
-    }, undefined, () => {}); // 파일 없으면 절차 생성 로봇 유지
-
     // 로봇개 (바닥에 엎드림)
     const dog = new THREE.Group();
     const dogMat = mat('#d3d5da', { roughness: 0.45, metalness: 0.2 });
@@ -356,6 +357,19 @@ const builders = {
     dog.position.set(-1.5, 0, 0.9);
     dog.rotation.y = 0.6;
     g.add(dog);
+
+    // ── 실제 3D 모델 슬롯: G1 휴머노이드 + 로봇개 ──
+    let g1Model = null, dogModel = null;
+    loadModelSlot(g, 'assets/models/g1.glb', {
+      height: 1.5, x: 0, y: 0.03, z: 0,
+      hide: [robot, strapL, strapR],
+      onLoad: (w) => { g1Model = w; },
+    });
+    loadModelSlot(g, 'assets/models/robotdog.glb', {
+      height: 0.55, x: -1.5, y: 0, z: 0.9, ry: 0.6,
+      hide: [dog],
+      onLoad: (w) => { dogModel = w; },
+    });
 
     // 흰 페데스탈 + 식물/꽃
     const ped1 = box(0.42, 0.75, 0.42, mat('#eceef1', { roughness: 0.9 })); ped1.position.set(-2.2, 0.375, -1.5); g.add(ped1);
@@ -382,10 +396,12 @@ const builders = {
       update(dt) {
         t += dt; acc += dt;
         if (acc > 0.12) { acc = 0; drawLED(t); }
-        if (mixer) {
-          mixer.update(dt); // GLB 애니메이션 클립 재생
-        } else if (glbModel) {
-          glbModel.rotation.y = Math.sin(t * 1.1) * 0.3; // 클립 없는 GLB는 스웨이만
+        if (g1Model) {
+          // G1 모델 댄스 (바운스 + 스웨이 + 트위스트)
+          const beat = t * 4.6;
+          g1Model.position.y = 0.03 + Math.abs(Math.sin(beat)) * 0.06;
+          g1Model.rotation.y = Math.sin(t * 1.15) * 0.55;
+          g1Model.rotation.z = Math.sin(beat * 0.5) * 0.06;
         } else {
           // 절차 생성 로봇 댄스 (하네스에 매달린 채)
           const beat = t * 4.6;
@@ -401,7 +417,12 @@ const builders = {
           refs.head.rotation.y = Math.sin(t * 1.7) * 0.3;
           refs.head.rotation.x = Math.sin(beat) * 0.06;
         }
-        dog.rotation.y = 0.6 + Math.sin(t * 0.7) * 0.08;
+        if (dogModel) {
+          dogModel.rotation.y = 0.6 + Math.sin(t * 0.7) * 0.18;
+          dogModel.position.y = Math.abs(Math.sin(t * 2.3)) * 0.025;
+        } else {
+          dog.rotation.y = 0.6 + Math.sin(t * 0.7) * 0.08;
+        }
       },
     };
   },
@@ -562,16 +583,41 @@ const builders = {
     ballu.position.set(0.95, 0.82, 0.15);
     g.add(ballu);
 
+    // ── 실제 3D 모델 슬롯: 리쿠 · 러봇 (발루는 balu.glb 준비되면 자동 교체) ──
+    let likuModel = null, lovotModel = null, balluModel = null;
+    loadModelSlot(g, 'assets/models/liku.glb', {
+      height: 0.52, x: -1.5, y: 1.0, z: 0.1, ry: 0.35,
+      hide: [liku], onLoad: (w) => { likuModel = w; },
+    });
+    loadModelSlot(g, 'assets/models/lovbot.glb', {
+      height: 0.46, x: -0.65, y: 1.0, z: 0.1, ry: -0.25,
+      hide: [lovot], onLoad: (w) => { lovotModel = w; },
+    });
+    loadModelSlot(g, 'assets/models/balu.glb', {
+      height: 0.62, x: 0.95, y: 0.82, z: 0.15,
+      hide: [ballu], onLoad: (w) => { balluModel = w; },
+    });
+
     let t = 0;
     return {
       group: g,
       update(dt) {
         t += dt;
-        liku.rotation.y = 0.35 + Math.sin(t * 0.6) * 0.4;          // 리쿠 두리번
-        lovot.position.y = 1.0 + Math.abs(Math.sin(t * 2.0)) * 0.028; // 러봇 콩콩
-        lovot.rotation.y = -0.25 + Math.sin(t * 0.9) * 0.15;
-        ballu.rotation.z = Math.sin(t * 1.4) * 0.12;               // 발루 흔들 (안 넘어짐!)
-        balloon.position.y = 0.62 + Math.sin(t * 1.8) * 0.02;
+        if (likuModel) likuModel.rotation.y = 0.35 + Math.sin(t * 0.6) * 0.4;
+        else liku.rotation.y = 0.35 + Math.sin(t * 0.6) * 0.4;      // 리쿠 두리번
+        if (lovotModel) {
+          lovotModel.position.y = 1.0 + Math.abs(Math.sin(t * 2.0)) * 0.028;
+          lovotModel.rotation.y = -0.25 + Math.sin(t * 0.9) * 0.15;
+        } else {
+          lovot.position.y = 1.0 + Math.abs(Math.sin(t * 2.0)) * 0.028; // 러봇 콩콩
+          lovot.rotation.y = -0.25 + Math.sin(t * 0.9) * 0.15;
+        }
+        if (balluModel) {
+          balluModel.rotation.z = Math.sin(t * 1.4) * 0.12;
+        } else {
+          ballu.rotation.z = Math.sin(t * 1.4) * 0.12;              // 발루 흔들 (안 넘어짐!)
+          balloon.position.y = 0.62 + Math.sin(t * 1.8) * 0.02;
+        }
       },
     };
   },
@@ -1009,6 +1055,13 @@ const builders = {
     bust.position.y = 1.05;
     g.add(bust);
 
+    // ── 실제 3D 모델 슬롯: 아메카 ──
+    let amecaModel = null;
+    loadModelSlot(g, 'assets/models/ameca.glb', {
+      height: 1.0, y: 1.05,
+      hide: [bust], onLoad: (w) => { amecaModel = w; },
+    });
+
     // 스포트라이트 콘
     const spot = new THREE.Mesh(
       new THREE.ConeGeometry(0.8, 2.2, 16, 1, true),
@@ -1022,6 +1075,10 @@ const builders = {
       group: g,
       update(dt) {
         t += dt;
+        if (amecaModel) {
+          amecaModel.rotation.y = Math.sin(t * 0.6) * 0.35; // 좌우 둘러보기
+          return;
+        }
         headPivot.rotation.y = Math.sin(t * 0.6) * 0.5;
         headPivot.rotation.x = Math.sin(t * 0.35) * 0.1;
         // 눈썹 미세 표정

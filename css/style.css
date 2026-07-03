@@ -343,5 +343,61 @@ canvas.game { display: block; position: fixed; inset: 0; }
 
 .ending-credit { font-size: 13px; letter-spacing: .05em; color: var(--accent); }
 
+/* ---------- 리쿠 채팅 ---------- */
+.chat-box {
+  height: 220px; overflow-y: auto; touch-action: pan-y;
+  background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 14px; padding: 12px; margin-bottom: 10px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.bubble {
+  max-width: 82%; padding: 9px 13px; border-radius: 14px;
+  font-size: 13.5px; line-height: 1.55;
+}
+.bubble.user {
+  align-self: flex-end; background: var(--accent-2); color: #0a1020;
+  border-bottom-right-radius: 4px;
+}
+.bubble.liku {
+  align-self: flex-start; background: #2a3040; color: var(--text);
+  border-bottom-left-radius: 4px;
+}
+.bubble.liku .who { display: block; font-size: 11px; color: #b388ff; margin-bottom: 3px; font-weight: 700; }
+.chat-questions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.chat-q {
+  font: inherit; font-size: 12.5px; color: var(--text);
+  background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 10px; padding: 9px 8px; cursor: pointer;
+}
+.chat-q:disabled { opacity: .4; }
+
+/* ---------- 카메라 촬영 ---------- */
+.cam-wrap { position: relative; margin: 10px 0; }
+.cam-video {
+  width: 100%; border-radius: 14px; display: block;
+  transform: scaleX(-1); background: #10131c;
+  border: 1px solid var(--line);
+}
+.cam-count {
+  position: absolute; inset: 0; display: flex;
+  align-items: center; justify-content: center;
+  font-size: 96px; font-weight: 800; color: #fff;
+  text-shadow: 0 2px 24px rgba(0,0,0,.8);
+}
+
+/* ---------- 합성 결과 + QR ---------- */
+.composite-img {
+  width: 100%; border-radius: 14px; display: block;
+  border: 1px solid var(--line); margin-bottom: 12px;
+}
+.qr-wrap { display: flex; justify-content: center; margin: 12px 0; }
+.qr-wrap canvas { border-radius: 10px; width: 200px; height: 200px; image-rendering: pixelated; }
+.qr-notice {
+  font-size: 13px; color: #ffcf7a; background: rgba(255,199,90,.08);
+  border: 1px solid rgba(255,199,90,.3); border-radius: 10px;
+  padding: 11px 13px; margin: 8px 0; line-height: 1.65; text-align: center;
+}
+.qr-notice b { color: #ffb64f; }
+
 @media (hover: hover) and (pointer: fine) { /* 데스크톱 */ }
 @media (pointer: coarse) { .desktop-only { display: none; } }
