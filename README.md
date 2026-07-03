@@ -36,8 +36,12 @@ python3 -m http.server 8000
 
 ## 콘텐츠 커스터마이징
 
-- `assets/photos/zone-01.jpg`~`zone-11.jpg` — 실제 전시 사진을 넣으면 존 액자에 자동 표시
-- `assets/videos/intro.mp4`, `passage.mp4` — 실제 인트로/통로 영상을 넣으면 자동 재생
+- 전시물 8종(로봇댄스·로봇팔·소형로봇·드럼·아바타·축구·다트·아메카)은 실제 전시 사진을
+  참고해 3D로 재현했고, 스크린·프로젝션에는 실사 텍스처(`assets/textures/`)가 들어갑니다
+- `assets/videos/intro.mp4` — 오프닝 이미지 4장으로 만든 인트로 영상 (탐험 시작 시 재생)
+- `assets/videos/outro.mp4` — 인트로 역재생 아웃트로 (미션 10 완료 시 재생)
+- `assets/videos/passage.mp4` — 통로 영상 (추후 추가 예정, 없으면 터널 시네마틱)
+- `assets/photos/zone-01.jpg`~`zone-11.jpg` — 넣으면 존 액자에 자동 표시
 - `js/config.js` — 존 위치·벽 구조(WALLS)·미션 순서(SEQUENCE)·타임아웃(90초) 설정
 
 ## 구조

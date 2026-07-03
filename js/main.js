@@ -177,8 +177,10 @@ function interact(zoneId) {
       saveGame();
       syncProgressUI();
       if (progress >= SEQUENCE.length) {
+        // 미션 10 완료 → 아웃트로 영상 → 엔딩
         sfx.portal();
-        ui.toast('🔑 <b>모든 미션 완료!</b> 통로(입구)로 돌아가 황금 열쇠를 사용하세요!', 4000);
+        ui.toast('🔑 황금 열쇠가 빛납니다 — 현실로 귀환합니다!', 2400);
+        setTimeout(() => { if (state === 'playing') startEnding(); }, 2600);
       } else {
         const next = zoneById(SEQUENCE[progress]);
         ui.toast(`📓 미션 ${progress}/10 기록! 다음은 <b>${next.name}</b> — 초록 빛기둥을 따라가세요.`, 3200);
@@ -307,6 +309,7 @@ document.getElementById('btn-skip').addEventListener('click', () => {
 });
 
 function startEnding() {
+  if (state === 'ending') return;
   state = 'ending';
   player.enabled = false;
   ui.showHUD(false);
@@ -316,7 +319,10 @@ function startEnding() {
   foldElapsed();
   saveGame();
   const minutes = Math.max(1, Math.round(savedElapsed / 60000));
-  setTimeout(() => { if (state === 'ending') ui.showEnding({ minutes }); }, 900);
+  // 아웃트로 영상(오프닝 역재생) → 엔딩 화면
+  playCinema('outro', () => {
+    if (state === 'ending') ui.showEnding({ minutes });
+  });
 }
 
 document.getElementById('btn-restart').addEventListener('click', () => {
