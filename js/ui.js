@@ -65,7 +65,7 @@ export const ui = {
       hudNext.innerHTML = `다음 미션 <b>${doneCount + 1}/10</b> — ${nextZone.name}`;
       hudNext.classList.remove('hidden');
     } else if (doneCount >= SEQUENCE.length) {
-      hudNext.innerHTML = `🔑 <b>통로(입구)</b>로 돌아가 현실로 귀환하세요!`;
+      hudNext.innerHTML = `🔑 황금 열쇠 획득 — 현실로 귀환합니다`;
       hudNext.classList.remove('hidden');
     } else {
       hudNext.classList.add('hidden');

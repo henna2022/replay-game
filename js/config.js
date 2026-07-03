@@ -6,13 +6,8 @@ export const HALL_RADIUS = 20;
 // ENTRANCE(플로어맵 우하단 통로)에서 홀 안쪽을 바라보고 시작
 export const SPAWN = { x: 6.7, z: 16.5, yaw: 0 };
 
+// 통로(INTRO)는 별도 존이 아니라 시작 시네마틱으로 표현됩니다.
 export const ZONES = [
-  {
-    id: 1, name: '통로 (INTRO)', color: '#4caf50', pos: [9, 7.5],
-    blurb: '현실 세계와 로봇의 세계를 이어 주는 통로. 여기서 모험이 시작되고, 황금 열쇠와 함께 끝납니다.',
-    missionTitle: '현실로 귀환',
-    missionDesc: '모든 미션을 마치고 황금 열쇠를 얻으면 이곳에서 현실로 돌아갈 수 있습니다.',
-  },
   {
     id: 2, name: '로봇 댄스', color: '#e2574c', pos: [11, -2],
     blurb: '사람의 춤을 직접 보고, 노래를 듣고, 스스로 따라 추는 로봇들의 무대. 멀티모달 학습과 동적 평형 제어 기술이 숨어 있습니다.',

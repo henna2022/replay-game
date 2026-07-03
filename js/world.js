@@ -126,47 +126,6 @@ function makeCheckMark() {
 /* ---------- 존별 전시물 빌더 (전시 사진 기반) ---------- */
 
 const builders = {
-  // 1. 통로(INTRO) — 귀환 게이트 + 키오스크
-  1(zone) {
-    const g = new THREE.Group();
-    const pillarMat = mat('#232939');
-    const p1 = box(0.4, 3.2, 0.4, pillarMat); p1.position.set(-1.6, 1.6, 0); g.add(p1);
-    const p2 = p1.clone(); p2.position.x = 1.6; g.add(p2);
-    const beam = box(3.9, 0.5, 0.5, pillarMat); beam.position.y = 3.35; g.add(beam);
-    const sign = new THREE.Mesh(
-      new THREE.PlaneGeometry(3.2, 0.42),
-      new THREE.MeshBasicMaterial({ map: makeLabel('RE:PLAY', { color: '#5ee6a8', size: 110 }), transparent: true })
-    );
-    sign.position.set(0, 3.36, 0.27); g.add(sign);
-
-    const portal = new THREE.Mesh(
-      new THREE.PlaneGeometry(2.8, 2.9),
-      new THREE.MeshBasicMaterial({ color: '#ffd75f', transparent: true, opacity: 0.06, side: THREE.DoubleSide, depthWrite: false })
-    );
-    portal.position.y = 1.55; g.add(portal);
-
-    const kiosk = new THREE.Group();
-    const stand = box(0.5, 1.0, 0.4, mat('#2a3040')); stand.position.y = 0.5; kiosk.add(stand);
-    const screen = box(0.9, 0.6, 0.06, glow('#3aa66a', 0.6));
-    screen.position.set(0, 1.2, 0); screen.rotation.x = -0.35; kiosk.add(screen);
-    kiosk.position.set(2.4, 0, 0.9);
-    g.add(kiosk);
-
-    let t = 0, unlocked = false;
-    return {
-      group: g,
-      setUnlocked(v) {
-        unlocked = v;
-        portal.material.opacity = v ? 0.4 : 0.06;
-      },
-      update(dt) {
-        t += dt;
-        sign.material.opacity = 0.75 + Math.sin(t * 2.2) * 0.25;
-        if (unlocked) portal.material.opacity = 0.32 + Math.sin(t * 3) * 0.12;
-      },
-    };
-  },
-
   // 2. 로봇 댄스 — 보라 네온 무대: LED 월 + 하네스 휴머노이드(꽃셔츠) + 로봇개
   2(zone) {
     const g = new THREE.Group();
@@ -1197,7 +1156,6 @@ export function buildWorld(scene) {
       exhibits.find(e => e.zone.id === zoneId)?.setCompleted(v);
     },
     setKeyObtained(v) {
-      unlockables[1]?.(v);
       unlockables[10]?.(v);
     },
     setBeacon(zoneId, color = '#5ee6a8') {

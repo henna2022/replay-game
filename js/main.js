@@ -108,8 +108,7 @@ function syncProgressUI() {
   for (let i = 0; i < SEQUENCE.length; i++) world.setZoneCompleted(SEQUENCE[i], i < progress);
   const allDone = progress >= SEQUENCE.length;
   world.setKeyObtained(allDone);
-  if (allDone) world.setBeacon(1, '#ffd75f');
-  else world.setBeacon(next.id, next.color);
+  world.setBeacon(allDone ? null : next.id, allDone ? undefined : next.color);
 }
 
 /* ---------- 상호작용 ---------- */
@@ -147,13 +146,6 @@ function interact(zoneId) {
 
   // 벽 너머 상호작용 방지
   if (wallBetween(player.pos.x, player.pos.z, zone.pos[0], zone.pos[1])) return;
-
-  // 통로(1): 모든 미션 완료 시 귀환
-  if (zone.id === 1) {
-    if (progress >= SEQUENCE.length) return startEnding();
-    ui.toast('현실과 로봇 세계를 잇는 통로입니다.<br>첫 미션은 <b>로봇 댄스</b> 무대에서 시작돼요!');
-    return;
-  }
 
   const idx = missionIndexOf(zone.id);
   if (idx > progress || (idx === -1)) {
@@ -202,11 +194,6 @@ function updatePrompt() {
   }
   if (!nearest) { ui.showPrompt(null); return; }
 
-  if (nearest.id === 1) {
-    if (progress >= SEQUENCE.length) ui.showPrompt(1, '🔑 황금 열쇠 사용 — 현실로 귀환');
-    else ui.showPrompt(null);
-    return;
-  }
   const idx = missionIndexOf(nearest.id);
   if (idx > progress) { ui.showPrompt(null); return; } // 잠긴 존은 프롬프트 없음
   const label = idx < progress
@@ -265,7 +252,7 @@ syncProgressUI();
 function updateSplashContinue() {
   const cont = document.getElementById('splash-continue');
   if (progress >= SEQUENCE.length) {
-    cont.textContent = '이어하기 — 모든 미션 완료! 통로에서 귀환만 남았습니다. (새로 시작은 기록장에서 초기화)';
+    cont.textContent = '이어하기 — 모든 미션 완료! 시작하면 바로 귀환 엔딩이 재생됩니다.';
     cont.classList.remove('hidden');
   } else if (progress > 0) {
     cont.textContent = `이어하기 — 지금까지 ${progress}/10개 미션을 기록했습니다.`;
@@ -286,9 +273,8 @@ function startGameplay() {
   syncProgressUI();
   const next = progress < SEQUENCE.length ? zoneById(SEQUENCE[progress]) : null;
   setTimeout(() => {
-    if (state !== 'playing') return;
-    if (next) ui.toast(`👣 초록 빛기둥을 따라 <b>${next.name}</b>로 이동하세요 (미션 ${progress + 1}/10)`, 3600);
-    else ui.toast('🔑 통로에서 황금 열쇠를 사용해 귀환하세요!', 3600);
+    if (state !== 'playing' || !next) return;
+    ui.toast(`👣 빛기둥을 따라 <b>${next.name}</b>로 이동하세요 (미션 ${progress + 1}/10)`, 3600);
   }, 600);
 }
 
@@ -297,9 +283,10 @@ document.getElementById('btn-start').addEventListener('click', () => {
   sfx.open();
   ui.showSplash(false);
   state = 'cinema';
-  // 인트로 영상 → 통로 영상 → 게임 시작
-  playCinema('intro', () => {
-    playCinema('passage', () => startGameplay());
+  // 통로 시네마틱(도시 불빛 → 포털 → 흡입 → 미스터리 놀이터) → 맵 진입
+  playCinema('passage', () => {
+    if (progress >= SEQUENCE.length) { state = 'playing'; startEnding(); }
+    else startGameplay();
   });
 });
 

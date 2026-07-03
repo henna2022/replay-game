@@ -1,34 +1,23 @@
-// ===== 인트로 / 통로 시네마틱 =====
-// assets/videos/intro.mp4, passage.mp4 파일이 있으면 실제 영상 재생,
-// 없으면 코드 생성 시네마틱(캔버스 + 자막)으로 대체합니다.
+// ===== 통로 시네마틱 (현실 → 미스터리 놀이터) =====
+// 실제 전시 통로의 오프닝 이미지 4장을 이어 붙인 연출:
+// 도시의 불빛 점등 → 포털 개방 → 빨려 들어감 → 미스터리 놀이터 도착
+// assets/videos/passage.mp4 가 있으면 영상을 우선 재생하고, 없으면 이미지 시네마틱 재생.
 import { sfx } from './audio.js';
 
 const STAGES = {
-  intro: {
-    src: 'assets/videos/intro.mp4',
-    style: 'stars',
-    lines: [
-      '서울로봇인공지능과학관에 오신 것을 환영합니다.',
-      '이번 기획전시의 주제는 ‘엔터테크’ —\n엔터테인먼트와 기술이 합쳐진 말입니다.',
-      '춤·음악·스포츠·게임 같은 우리의 놀이에\n인공지능과 로봇 기술이 더해지고 있습니다.',
-      '이 기술들은 인간의 놀이 문화를\n어떻게 바꾸게 될까요?',
-      '오늘, 여러분만의 답을 찾아보세요.',
-    ],
-  },
   passage: {
     src: 'assets/videos/passage.mp4',
-    style: 'tunnel',
-    lines: [
-      '지금 서 있는 이 공간은\n현실 세계와 로봇의 세계를 이어 주는 통로입니다.',
-      '전시장 곳곳에 10가지 미션이 숨겨져 있습니다.',
-      '미션을 완수하며 여러분만의 생각과 답을 찾아보세요.',
-      '모든 기록을 마치고 ‘황금 열쇠’를 얻으면\n현실로 귀환할 수 있습니다.',
-      '그럼 이제, 로봇의 세상으로 이동합니다.',
+    kind: 'images',
+    images: [
+      'assets/cinema/passage-1.jpg', // 낮 도시
+      'assets/cinema/passage-2.jpg', // 불빛 켜진 밤 도시
+      'assets/cinema/passage-3.jpg', // 거대한 포털(링)
+      'assets/cinema/passage-4.jpg', // 별빛 터널
     ],
   },
   outro: {
     src: 'assets/videos/outro.mp4',
-    style: 'stars',
+    kind: 'stars',
     lines: [
       '열 가지 미션을 모두 마친 당신.',
       '황금 열쇠가 빛나며, 통로가 다시 열립니다.',
@@ -57,8 +46,6 @@ export function playCinema(stageName, onDone) {
   videoEl.classList.add('hidden');
   cinemaEl.classList.add('hidden');
 
-  // 실제 영상이 있는지 확인 후 없으면 폴백.
-  // 판별(프로브) 단계에서 건너뛰기해도 타이머·리스너가 남지 않도록 즉시 cleanup 등록.
   let settled = false;
   let probeTimer = 0;
   const onCanPlay = () => useVideo();
@@ -73,7 +60,8 @@ export function playCinema(stageName, onDone) {
     if (settled) return;
     settled = true;
     clearProbe();
-    runFallback(stage, cinemaEl);
+    if (stage.kind === 'images') runPassage(stage, cinemaEl);
+    else runFallback(stage, cinemaEl);
   }
   function useVideo() {
     if (settled) return;
@@ -117,7 +105,197 @@ function finish() {
   cb?.();
 }
 
-/* ---------- 폴백 시네마틱 (캔버스 + 자막) ---------- */
+/* ---------- 이미지 통로 시네마틱 ---------- */
+
+// 타임라인(초): 페이즈 경계
+const P = { lightsOn: 0, portal: 4.6, suck: 9.0, arrive: 12.4, end: 15.6 };
+
+const PASSAGE_CAPTIONS = [
+  { t: 0.4, text: '해가 지고 — 도시의 불빛이 하나둘 켜집니다.' },
+  { t: P.portal + 0.3, text: '그 순간, 하늘에 거대한 포털이 열립니다.' },
+  { t: P.suck + 0.2, text: '당신은 빛 속으로 빨려 들어갑니다…!' },
+  { t: P.arrive + 0.6, text: '여기는 로봇과 AI의 세계 — 미스터리 놀이터.' },
+];
+
+function runPassage(stage, root) {
+  root.classList.remove('hidden');
+  root.innerHTML = `
+    <canvas id="cinema-canvas"></canvas>
+    <p id="cinema-caption"></p>`;
+  const canvas = root.querySelector('#cinema-canvas');
+  const caption = root.querySelector('#cinema-caption');
+  const ctx = canvas.getContext('2d');
+
+  const resize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
+  resize();
+  window.addEventListener('resize', resize);
+
+  let alive = true;
+  let rafId = 0;
+  cleanup = () => {
+    alive = false;
+    cancelAnimationFrame(rafId);
+    window.removeEventListener('resize', resize);
+  };
+
+  // 이미지 로드 (실패 시 별하늘 폴백)
+  const imgs = stage.images.map(src => {
+    const im = new Image();
+    im.src = src;
+    return im;
+  });
+  const loaded = imgs.map(im => new Promise(res => {
+    if (im.complete && im.naturalWidth) return res(true);
+    im.onload = () => res(true);
+    im.onerror = () => res(false);
+  }));
+  const timeout = new Promise(res => setTimeout(() => res('timeout'), 4000));
+
+  Promise.race([Promise.all(loaded), timeout]).then(result => {
+    if (!alive) return;
+    const ok = Array.isArray(result) && result.every(Boolean);
+    if (!ok) {
+      // 이미지가 없으면 기존 별하늘 폴백으로 대체
+      cleanup?.();
+      runFallback({
+        style: 'tunnel',
+        lines: PASSAGE_CAPTIONS.map(c => c.text),
+      }, root);
+      return;
+    }
+    start();
+  });
+
+  // 이미지 커버 드로우 (focus 지점 기준 줌)
+  function drawCover(img, zoom, fx = 0.5, fy = 0.5, alpha = 1, shakeX = 0, shakeY = 0) {
+    const W = canvas.width, H = canvas.height;
+    const s = Math.max(W / img.naturalWidth, H / img.naturalHeight) * zoom;
+    const dw = img.naturalWidth * s, dh = img.naturalHeight * s;
+    const dx = W * 0.5 - fx * dw + shakeX;
+    const dy = H * 0.5 - fy * dh + shakeY;
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(img, dx, dy, dw, dh);
+    ctx.globalAlpha = 1;
+  }
+
+  const easeIn = (x) => x * x * x;
+  const clamp01 = (x) => Math.max(0, Math.min(1, x));
+  const RING = { fx: 0.49, fy: 0.5 }; // 포털 사진의 링 중심
+
+  let start0 = 0;
+  let capIdx = -1;
+
+  function start() {
+    start0 = performance.now();
+    rafId = requestAnimationFrame(draw);
+  }
+
+  function draw(now) {
+    if (!alive) return;
+    rafId = requestAnimationFrame(draw);
+    const t = (now - start0) / 1000;
+    const W = canvas.width, H = canvas.height;
+
+    ctx.fillStyle = '#04050a';
+    ctx.fillRect(0, 0, W, H);
+
+    if (t < P.portal) {
+      // ── 1) 낮 → 불빛 켜진 밤 (크로스페이드)
+      const zoom = 1.0 + t * 0.012;
+      drawCover(imgs[0], zoom);
+      const fade = clamp01((t - 1.6) / 2.2);
+      if (fade > 0) drawCover(imgs[1], zoom * 1.01, 0.5, 0.5, fade);
+    } else if (t < P.suck) {
+      // ── 2) 포털 개방
+      const pt = t - P.portal;
+      const zoom = 1.05 + pt * 0.015;
+      drawCover(imgs[1], zoom);
+      const fade = clamp01(pt / 1.6);
+      if (fade > 0) drawCover(imgs[2], 1.0 + pt * 0.02, RING.fx, RING.fy, fade);
+      // 링 중심 글로우 펄스
+      if (fade > 0.5) {
+        const pulse = 0.12 + Math.sin(t * 4) * 0.06;
+        const grd = ctx.createRadialGradient(W * 0.5, H * 0.5, 10, W * 0.5, H * 0.5, H * 0.42);
+        grd.addColorStop(0, `rgba(200,225,255,${pulse})`);
+        grd.addColorStop(1, 'transparent');
+        ctx.fillStyle = grd;
+        ctx.fillRect(0, 0, W, H);
+      }
+    } else if (t < P.arrive) {
+      // ── 3) 포털 속으로 흡입 (가속 줌 + 워프 스트릭 + 흔들림)
+      const st = (t - P.suck) / (P.arrive - P.suck);
+      const shake = st * 5;
+      const sx = Math.sin(t * 47) * shake, sy = Math.cos(t * 39) * shake;
+      const zoom3 = 1.1 + easeIn(st) * 3.4;
+      drawCover(imgs[2], zoom3, RING.fx, RING.fy, 1, sx, sy);
+      // 별빛 터널로 크로스페이드 (뒤에서 다가옴)
+      const fade4 = clamp01((st - 0.62) / 0.38);
+      if (fade4 > 0) {
+        const zoom4 = 2.6 - fade4 * 0.9;
+        drawCover(imgs[3], zoom4, 0.5, 0.5, fade4, sx * 0.5, sy * 0.5);
+      }
+      // 워프 스트릭
+      const streaks = 26;
+      ctx.save();
+      ctx.globalAlpha = 0.28 * Math.min(1, st * 2);
+      ctx.strokeStyle = '#dfe9ff';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < streaks; i++) {
+        const a = (i / streaks) * Math.PI * 2 + (i % 3) * 0.4;
+        const r1 = (60 + (i * 53) % 140) * (1 + st * 2.2);
+        const r2 = r1 + 70 + st * 260;
+        ctx.beginPath();
+        ctx.moveTo(W / 2 + Math.cos(a) * r1, H / 2 + Math.sin(a) * r1);
+        ctx.lineTo(W / 2 + Math.cos(a) * r2, H / 2 + Math.sin(a) * r2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    } else {
+      // ── 4) 별빛 터널 감속 → 플래시 → 도착
+      const at = t - P.arrive;
+      const zoom4 = 1.7 + at * 0.08;
+      drawCover(imgs[3], zoom4);
+      // 초록 플래시 (미스터리 놀이터 도착)
+      const flash = clamp01((t - (P.end - 1.6)) / 0.7) - clamp01((t - (P.end - 0.6)) / 0.6);
+      if (flash > 0) {
+        ctx.fillStyle = `rgba(180,255,215,${flash * 0.85})`;
+        ctx.fillRect(0, 0, W, H);
+      }
+      // 마지막 페이드 아웃
+      const out = clamp01((t - (P.end - 0.6)) / 0.6);
+      if (out > 0) {
+        ctx.fillStyle = `rgba(4,5,10,${out})`;
+        ctx.fillRect(0, 0, W, H);
+      }
+    }
+
+    // 하단 자막
+    let idx = -1;
+    for (let i = 0; i < PASSAGE_CAPTIONS.length; i++) {
+      if (t >= PASSAGE_CAPTIONS[i].t) idx = i;
+    }
+    if (idx !== capIdx && idx >= 0) {
+      capIdx = idx;
+      caption.textContent = PASSAGE_CAPTIONS[idx].text;
+      caption.classList.remove('cap-in');
+      void caption.offsetWidth;
+      caption.classList.add('cap-in');
+      sfx.tap();
+    }
+
+    if (t >= P.end) stop();
+  }
+
+  function stop() {
+    if (!alive) return;
+    alive = false;
+    cancelAnimationFrame(rafId);
+    window.removeEventListener('resize', resize);
+    finish();
+  }
+}
+
+/* ---------- 범용 폴백 시네마틱 (캔버스 + 자막) ---------- */
 
 function runFallback(stage, root) {
   root.classList.remove('hidden');
@@ -132,7 +310,6 @@ function runFallback(stage, root) {
   resize();
   window.addEventListener('resize', resize);
 
-  // 파티클 (별 / 터널 링)
   const stars = Array.from({ length: 160 }, () => ({
     a: Math.random() * Math.PI * 2,
     r: Math.random(),
@@ -155,7 +332,6 @@ function runFallback(stage, root) {
     ctx.fillRect(0, 0, W, H);
 
     if (stage.style === 'stars') {
-      // 느리게 흐르는 별
       for (const s of stars) {
         const rr = s.r * Math.min(W, H) * 0.55;
         const x = cx + Math.cos(s.a + t * 0.03 / s.z) * rr;
@@ -165,7 +341,6 @@ function runFallback(stage, root) {
         ctx.beginPath(); ctx.arc(x, y, 1.1 + s.z * 1.4, 0, Math.PI * 2); ctx.fill();
       }
     } else {
-      // 가속 터널
       for (let i = 0; i < 14; i++) {
         const p = ((t * 0.55 + i / 14) % 1);
         const r = p * p * Math.max(W, H) * 0.75 + 6;
@@ -174,7 +349,6 @@ function runFallback(stage, root) {
         ctx.lineWidth = 2 + p * 5;
         ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
       }
-      // 흘러가는 별
       for (const s of stars) {
         const p = ((s.z + t * 0.35) % 1);
         const rr = p * p * Math.max(W, H) * 0.7 + 4;
@@ -185,13 +359,12 @@ function runFallback(stage, root) {
       }
     }
 
-    // 자막 갱신
     const idx = Math.min(Math.floor(t * 1000 / LINE_MS), stage.lines.length - 1);
     if (idx !== lineIdx) {
       lineIdx = idx;
       caption.innerHTML = stage.lines[idx].replaceAll('\n', '<br>');
       caption.classList.remove('cap-in');
-      void caption.offsetWidth; // 리플로우로 애니메이션 재시작
+      void caption.offsetWidth;
       caption.classList.add('cap-in');
       sfx.tap();
     }
