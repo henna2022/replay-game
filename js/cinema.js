@@ -28,7 +28,7 @@ const OUTRO_END = 19.5;
 const OP = { exitWarp: 4.0, closing: 9.0, city: 14.0 };
 
 const STAGES = {
-  passage: { src: 'assets/videos/opening.mp4', dir: 1, captions: PASSAGE_CAPTIONS, end: PASSAGE_END },
+  passage: { src: 'assets/videos/opening_replay.mp4', dir: 1, captions: PASSAGE_CAPTIONS, end: PASSAGE_END },
   outro: { src: 'assets/videos/outro.mp4', dir: -1, captions: OUTRO_CAPTIONS, end: OUTRO_END },
 };
 
