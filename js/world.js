@@ -1,5 +1,6 @@
 // ===== RE:PLAY 전시홀 + 벽 구조 + 실사 기반 전시물 =====
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { ZONES, HALL_RADIUS, WALLS, FACILITY } from './config.js';
 
 const texLoader = new THREE.TextureLoader();
@@ -196,58 +197,147 @@ const builders = {
     const gBeam = box(1.75, 0.09, 0.09, mat('#15151c')); gBeam.position.y = 3.1; gantry.add(gBeam);
     g.add(gantry);
 
-    // 꽃무늬 셔츠 텍스처
-    const floralTex = canvasTex(256, 256, (ctx) => {
-      ctx.fillStyle = '#efe8d8'; ctx.fillRect(0, 0, 256, 256);
-      const cols = ['#e58fb1', '#d6c453', '#7ba05b', '#c96a4a'];
-      for (let i = 0; i < 60; i++) {
-        ctx.fillStyle = cols[i % 4];
-        const x = Math.random() * 256, y = Math.random() * 256, r = 5 + Math.random() * 9;
+    // ── 댄스 로봇: 관절형 휴머노이드 + 하와이안 셔츠 + 레이 (전시 실물 참고) ──
+    // 하와이안 셔츠 패턴 (히비스커스 + 잎)
+    const floralTex = canvasTex(512, 512, (ctx) => {
+      ctx.fillStyle = '#f1ead6'; ctx.fillRect(0, 0, 512, 512);
+      const leaf = (x, y, r, rot, col) => {
+        ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
+        ctx.fillStyle = col;
+        ctx.beginPath(); ctx.ellipse(0, 0, r * 0.3, r, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      };
+      const hibiscus = (x, y, r, rot, col) => {
+        ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
+        ctx.fillStyle = col;
         for (let p = 0; p < 5; p++) {
-          const a = (p / 5) * Math.PI * 2;
-          ctx.beginPath(); ctx.arc(x + Math.cos(a) * r * 0.7, y + Math.sin(a) * r * 0.7, r * 0.45, 0, Math.PI * 2); ctx.fill();
+          ctx.rotate((Math.PI * 2) / 5);
+          ctx.beginPath(); ctx.ellipse(0, r * 0.6, r * 0.36, r * 0.6, 0, 0, Math.PI * 2); ctx.fill();
         }
-        ctx.fillStyle = '#5a7a3a';
-        ctx.beginPath(); ctx.arc(x, y, r * 0.3, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#c9a23c';
+        ctx.beginPath(); ctx.arc(0, 0, r * 0.2, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      };
+      for (let i = 0; i < 30; i++) {
+        leaf(Math.random() * 512, Math.random() * 512, 17 + Math.random() * 15,
+          Math.random() * Math.PI, i % 2 ? '#71925a' : '#54774a');
+      }
+      const cols = ['#e39ab5', '#e8b64f', '#d97f56', '#e8788f'];
+      for (let i = 0; i < 24; i++) {
+        hibiscus(Math.random() * 512, Math.random() * 512, 15 + Math.random() * 14,
+          Math.random() * Math.PI, cols[i % 4]);
       }
     });
 
-    // 휴머노이드 (하네스에 매달림)
-    const robot = new THREE.Group();
+    const shellMat2 = mat('#e6e9ee', { roughness: 0.32, metalness: 0.28 }); // 흰 유광 셸
+    const jointMat2 = mat('#191a20', { roughness: 0.3, metalness: 0.45 });  // 검은 관절
     const shirtMat = new THREE.MeshStandardMaterial({ map: floralTex, roughness: 0.85 });
-    const torso = box(0.52, 0.62, 0.3, shirtMat); torso.position.y = 1.2; robot.add(torso);
-    const head = box(0.26, 0.3, 0.28, mat('#23252c', { roughness: 0.4 })); head.position.y = 1.72; robot.add(head);
-    const visor = box(0.2, 0.1, 0.02, glow('#111', 0.1));
-    visor.material.metalness = 0.9; visor.material.roughness = 0.15;
-    visor.position.set(0, 1.75, 0.15); robot.add(visor);
-    // 화환(레이)
-    const leiG = new THREE.Group();
-    for (let i = 0; i < 14; i++) {
-      const a = (i / 14) * Math.PI * 2;
-      const petal = sph(0.045, mat(i % 3 ? '#e78cb0' : '#f3c3d4', { roughness: 0.9 }), 8, 6);
-      petal.position.set(Math.cos(a) * 0.2, 0, Math.sin(a) * 0.2);
-      leiG.add(petal);
+    const capsule = (r, len, m) => new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 4, 10), m);
+
+    const robot = new THREE.Group();
+    const refs = {};
+
+    // 다리 (허벅지/정강이 캡슐 + 원형 무릎 포드 + 신발)
+    for (const s of [-1, 1]) {
+      const thigh = capsule(0.055, 0.26, shellMat2); thigh.position.set(s * 0.09, 0.71, 0); robot.add(thigh);
+      const kneePod = cyl(0.052, 0.052, 0.13, jointMat2, 12);
+      kneePod.rotation.z = Math.PI / 2; kneePod.position.set(s * 0.09, 0.52, 0.01); robot.add(kneePod);
+      const shin = capsule(0.042, 0.3, shellMat2); shin.position.set(s * 0.09, 0.3, 0); robot.add(shin);
+      const ankle = sph(0.038, jointMat2, 10, 8); ankle.position.set(s * 0.09, 0.1, 0); robot.add(ankle);
+      const shoe = box(0.095, 0.07, 0.24, jointMat2); shoe.position.set(s * 0.09, 0.04, 0.045); robot.add(shoe);
     }
-    leiG.position.y = 1.5; leiG.rotation.x = 0.25; robot.add(leiG);
-    // 팔 (검은 장갑)
-    const armL = new THREE.Group();
-    const armMeshL = box(0.11, 0.52, 0.11, shirtMat); armMeshL.position.y = -0.24; armL.add(armMeshL);
-    const gloveL = box(0.1, 0.12, 0.1, mat('#15151a')); gloveL.position.y = -0.55; armL.add(gloveL);
-    armL.position.set(-0.34, 1.46, 0); robot.add(armL);
-    const armR = armL.clone(); armR.position.x = 0.34; robot.add(armR);
-    // 다리 (흰 금속)
-    const legMat = mat('#d8dade', { metalness: 0.35, roughness: 0.5 });
-    const legL = box(0.13, 0.68, 0.14, legMat); legL.position.set(-0.14, 0.55, 0); robot.add(legL);
-    const legR = legL.clone(); legR.position.x = 0.14; robot.add(legR);
-    const footL = box(0.14, 0.08, 0.24, mat('#191920')); footL.position.set(-0.14, 0.17, 0.03); robot.add(footL);
-    const footR = footL.clone(); footR.position.x = 0.14; robot.add(footR);
-    // 하네스 스트랩
-    const strapL = cyl(0.014, 0.014, 1.15, mat('#191920'), 6);
-    strapL.position.set(-0.18, 2.42, 0); strapL.rotation.z = 0.12; robot.add(strapL);
-    const strapR = strapL.clone(); strapR.position.x = 0.18; strapR.rotation.z = -0.12; robot.add(strapR);
-    robot.position.y = 0.13;
+    const hip = box(0.24, 0.11, 0.15, jointMat2); hip.position.y = 0.87; robot.add(hip);
+
+    // 상체 (트위스트 그룹)
+    const upper = new THREE.Group(); upper.position.y = 0.93; robot.add(upper);
+    refs.upper = upper;
+    const shorts = cyl(0.14, 0.16, 0.14, mat('#3a3d45', { roughness: 0.8 }), 10);
+    shorts.position.y = 0.02; upper.add(shorts);
+    // 루즈핏 셔츠 + 소매
+    const shirt = cyl(0.165, 0.225, 0.5, shirtMat, 12);
+    shirt.position.y = 0.32; upper.add(shirt);
+    // 팔 (어깨 피벗 → 팔꿈치 피벗 → 장갑) — 소매는 팔을 따라 움직임
+    for (const s of [-1, 1]) {
+      const armPivot = new THREE.Group();
+      armPivot.position.set(s * 0.28, 0.53, 0);
+      const shoulder = sph(0.05, jointMat2, 10, 8); armPivot.add(shoulder);
+      const sleeve = cyl(0.08, 0.098, 0.16, shirtMat, 10);
+      sleeve.position.y = -0.07; armPivot.add(sleeve);
+      const upperArm = capsule(0.038, 0.15, shellMat2); upperArm.position.y = -0.13; armPivot.add(upperArm);
+      const elbowPivot = new THREE.Group(); elbowPivot.position.y = -0.24; armPivot.add(elbowPivot);
+      const elbow = sph(0.042, jointMat2, 10, 8); elbowPivot.add(elbow);
+      const forearm = capsule(0.034, 0.16, shellMat2); forearm.position.y = -0.12; elbowPivot.add(forearm);
+      const glove = box(0.07, 0.1, 0.055, jointMat2); glove.position.y = -0.25; elbowPivot.add(glove);
+      upper.add(armPivot);
+      refs[s < 0 ? 'armL' : 'armR'] = armPivot;
+      refs[s < 0 ? 'foreL' : 'foreR'] = elbowPivot;
+    }
+    // 목 + 유광 블랙 헬멧 + 바이저
+    const neck = cyl(0.045, 0.05, 0.07, jointMat2, 10); neck.position.y = 0.62; upper.add(neck);
+    const headPivot = new THREE.Group(); headPivot.position.y = 0.76; upper.add(headPivot);
+    refs.head = headPivot;
+    const helmet = sph(0.115, mat('#0c0d12', { roughness: 0.12, metalness: 0.65 }), 20, 16);
+    helmet.scale.set(0.92, 1.08, 0.98); headPivot.add(helmet);
+    const visor = new THREE.Mesh(
+      new THREE.SphereGeometry(0.113, 16, 12, -0.75, 1.5, 1.0, 0.85),
+      new THREE.MeshStandardMaterial({ color: '#232a3d', roughness: 0.06, metalness: 0.9 })
+    );
+    visor.scale.set(0.94, 1.05, 1.0);
+    visor.rotation.y = -Math.PI / 2; // 정면(+z)으로
+    headPivot.add(visor);
+
+    // 레이 (목걸이 링 + 앞으로 길게 늘어진 스트랜드)
+    const leiColors = ['#e88bb0', '#f2b3c9', '#d96a94'];
+    function leiStrand(radius, tiltX, y, z, count) {
+      const strand = new THREE.Group();
+      for (let i = 0; i < count; i++) {
+        const a = (i / count) * Math.PI * 2;
+        const cluster = new THREE.Group();
+        for (let p = 0; p < 4; p++) {
+          const f = sph(0.021, mat(leiColors[(i + p) % 3], { roughness: 0.9 }), 7, 5);
+          f.position.set((Math.random() - 0.5) * 0.032, (Math.random() - 0.5) * 0.032, (Math.random() - 0.5) * 0.032);
+          cluster.add(f);
+        }
+        cluster.position.set(Math.cos(a) * radius, 0, Math.sin(a) * radius * 0.8);
+        strand.add(cluster);
+      }
+      strand.rotation.x = tiltX;
+      strand.position.set(0, y, z);
+      return strand;
+    }
+    upper.add(leiStrand(0.15, 0.35, 0.56, 0.02, 16));  // 목 둘레
+    upper.add(leiStrand(0.2, 1.35, 0.36, 0.13, 22));   // 가슴 앞 긴 스트랜드
+
+    robot.position.y = 0.03;
     g.add(robot);
-    robot.userData = { armL, armR };
+
+    // 하네스 스트랩 (갠트리 연결)
+    const strapL = cyl(0.013, 0.013, 1.5, mat('#191920'), 6);
+    strapL.position.set(-0.17, 2.3, 0); strapL.rotation.z = 0.07; g.add(strapL);
+    const strapR = strapL.clone(); strapR.position.x = 0.17; strapR.rotation.z = -0.07; g.add(strapR);
+
+    // ── 실제 3D 모델 슬롯: assets/models/robot-dance.glb 가 있으면 자동 교체 ──
+    let mixer = null;
+    let glbModel = null;
+    new GLTFLoader().load('assets/models/robot-dance.glb', (gltf) => {
+      const model = gltf.scene;
+      const bbox = new THREE.Box3().setFromObject(model);
+      const size = new THREE.Vector3(); bbox.getSize(size);
+      model.scale.setScalar(1.6 / (size.y || 1));
+      bbox.setFromObject(model);
+      const center = new THREE.Vector3(); bbox.getCenter(center);
+      model.position.x -= center.x;
+      model.position.z -= center.z;
+      model.position.y -= bbox.min.y - 0.03;
+      robot.visible = false;
+      g.add(model);
+      if (gltf.animations && gltf.animations.length) {
+        mixer = new THREE.AnimationMixer(model);
+        mixer.clipAction(gltf.animations[0]).play();
+      } else {
+        glbModel = model;
+      }
+    }, undefined, () => {}); // 파일 없으면 절차 생성 로봇 유지
 
     // 로봇개 (바닥에 엎드림)
     const dog = new THREE.Group();
@@ -292,11 +382,25 @@ const builders = {
       update(dt) {
         t += dt; acc += dt;
         if (acc > 0.12) { acc = 0; drawLED(t); }
-        // 하네스에 매달려 살짝 흔들리는 댄스
-        robot.rotation.y = Math.sin(t * 1.1) * 0.35;
-        robot.position.y = 0.13 + Math.sin(t * 2.1) * 0.03;
-        robot.userData.armL.rotation.z = 0.35 + Math.sin(t * 2.4) * 0.5;
-        robot.userData.armR.rotation.z = -0.35 - Math.sin(t * 2.4 + 1.2) * 0.5;
+        if (mixer) {
+          mixer.update(dt); // GLB 애니메이션 클립 재생
+        } else if (glbModel) {
+          glbModel.rotation.y = Math.sin(t * 1.1) * 0.3; // 클립 없는 GLB는 스웨이만
+        } else {
+          // 절차 생성 로봇 댄스 (하네스에 매달린 채)
+          const beat = t * 4.6;
+          robot.position.y = 0.03 + Math.abs(Math.sin(beat)) * 0.045;
+          robot.rotation.y = Math.sin(t * 1.15) * 0.4;
+          refs.upper.rotation.y = Math.sin(beat * 0.5) * 0.18;
+          refs.armL.rotation.z = 0.5 + Math.sin(beat) * 0.75;
+          refs.armR.rotation.z = -0.5 - Math.sin(beat + 1.4) * 0.75;
+          refs.armL.rotation.x = Math.sin(beat * 0.5) * 0.5;
+          refs.armR.rotation.x = Math.cos(beat * 0.5) * 0.5;
+          refs.foreL.rotation.x = -0.5 + Math.sin(beat + 0.5) * 0.45;
+          refs.foreR.rotation.x = -0.5 + Math.cos(beat) * 0.45;
+          refs.head.rotation.y = Math.sin(t * 1.7) * 0.3;
+          refs.head.rotation.x = Math.sin(beat) * 0.06;
+        }
         dog.rotation.y = 0.6 + Math.sin(t * 0.7) * 0.08;
       },
     };
