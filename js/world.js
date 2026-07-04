@@ -9,8 +9,12 @@ const texLoader = new THREE.TextureLoader();
 const gltfLoader = new GLTFLoader();
 gltfLoader.setMeshoptDecoder(MeshoptDecoder);
 
+// GLB에 포함된 애니메이션 클립을 재생하는 믹서들 (world.update에서 매 프레임 advance)
+const modelMixers = [];
+
 // GLB 모델 슬롯: 파일이 있으면 절차 생성 모델을 실제 3D 모델로 교체
-// 높이(height)에 맞춰 스케일·바닥을 정렬하고, hide 목록의 절차 모델을 숨김
+// 높이(height)에 맞춰 스케일·바닥을 정렬하고, hide 목록의 절차 모델을 숨김.
+// GLB에 애니메이션 클립(춤 등)이 있으면 자동 재생하고 wrap.userData.hasClip=true 설정.
 function loadModelSlot(parent, path, { height = 1.5, x = 0, y = 0, z = 0, ry = 0, hide = [], onLoad } = {}) {
   gltfLoader.load(path, (gltf) => {
     const model = gltf.scene;
@@ -25,6 +29,13 @@ function loadModelSlot(parent, path, { height = 1.5, x = 0, y = 0, z = 0, ry = 0
     wrap.position.set(x, y, z);
     wrap.rotation.y = ry;
     wrap.userData.baseRy = ry;
+    // 애니메이션 클립이 있으면 첫 클립을 반복 재생 (Mixamo 댄스 등)
+    if (gltf.animations && gltf.animations.length) {
+      const mixer = new THREE.AnimationMixer(model);
+      mixer.clipAction(gltf.animations[0]).play();
+      modelMixers.push(mixer);
+      wrap.userData.hasClip = true;
+    }
     for (const o of hide) o.visible = false;
     parent.add(wrap);
     onLoad?.(wrap);
@@ -441,8 +452,11 @@ const builders = {
       update(dt) {
         t += dt; acc += dt;
         if (acc > 0.12) { acc = 0; drawLED(t); }
-        if (g1Model) {
-          // G1 모델 댄스 (바운스 + 스웨이 + 트위스트)
+        if (g1Model && g1Model.userData.hasClip) {
+          // GLB에 춤 애니메이션 클립 있음 — 믹서가 구동, 제자리 회전만 살짝
+          g1Model.rotation.y = g1Model.userData.baseRy + Math.sin(t * 0.5) * 0.15;
+        } else if (g1Model) {
+          // 클립 없는 정지 모델 — 절차 댄스(바운스 + 스웨이 + 트위스트)로 흉내
           const beat = t * 4.6;
           g1Model.position.y = 0.03 + Math.abs(Math.sin(beat)) * 0.06;
           g1Model.rotation.y = g1Model.userData.baseRy + Math.sin(t * 1.15) * 0.55;
@@ -462,7 +476,10 @@ const builders = {
           refs.head.rotation.y = Math.sin(t * 1.7) * 0.3;
           refs.head.rotation.x = Math.sin(beat) * 0.06;
         }
-        if (dogModel) {
+        if (dogModel && dogModel.userData.hasClip) {
+          // GLB 애니메이션 클립 구동 (제자리 유지)
+        } else if (dogModel) {
+          // 클립 없는 정지 모델 — 절차 흔들/바운스
           dogModel.rotation.y = dogModel.userData.baseRy + Math.sin(t * 0.7) * 0.18;
           dogModel.position.y = Math.abs(Math.sin(t * 2.3)) * 0.025;
         } else {
@@ -1214,6 +1231,83 @@ function makeBeacon(scene) {
   return { group: g, pillar, arrow };
 }
 
+/* ---------- 중앙 귀환 포털 (10개 미션 완료 시 열림) ---------- */
+
+function makeCenterPortal(scene) {
+  const g = new THREE.Group();
+  g.position.set(0, 0, 0);
+
+  // 바닥 이중 링
+  const ring1 = new THREE.Mesh(new THREE.TorusGeometry(1.7, 0.1, 12, 48), glow('#ffd75f', 1.6));
+  ring1.rotation.x = Math.PI / 2; ring1.position.y = 0.06; g.add(ring1);
+  const ring2 = new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.05, 10, 40), glow('#fff2c0', 1.4));
+  ring2.rotation.x = Math.PI / 2; ring2.position.y = 0.06; g.add(ring2);
+
+  // 소용돌이 에너지 디스크 (바닥에서 위로 발광)
+  const swirlTex = canvasTex(256, 256, (ctx) => {
+    ctx.fillStyle = '#0000'; ctx.clearRect(0, 0, 256, 256);
+    ctx.translate(128, 128);
+    for (let i = 0; i < 5; i++) {
+      ctx.strokeStyle = `rgba(255,230,150,${0.55 - i * 0.08})`;
+      ctx.lineWidth = 8 - i;
+      ctx.beginPath();
+      for (let a = 0; a < Math.PI * 4; a += 0.15) {
+        const r = 8 + a * 15 + i * 4;
+        const x = Math.cos(a + i) * r, y = Math.sin(a + i) * r;
+        a === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+  });
+  const disc = new THREE.Mesh(
+    new THREE.CircleGeometry(1.65, 40),
+    new THREE.MeshBasicMaterial({ map: swirlTex, color: '#ffe08a', transparent: true, opacity: 0.7, depthWrite: false })
+  );
+  disc.rotation.x = -Math.PI / 2; disc.position.y = 0.08; g.add(disc);
+
+  // 위로 솟는 발광 기둥 (멀리서도 보이게)
+  const column = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.6, 1.7, 8, 28, 1, true),
+    new THREE.MeshBasicMaterial({ color: '#ffd75f', transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false })
+  );
+  column.position.y = 4; g.add(column);
+  const columnInner = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.7, 0.9, 8, 20, 1, true),
+    new THREE.MeshBasicMaterial({ color: '#fff2c0', transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false })
+  );
+  columnInner.position.y = 4; g.add(columnInner);
+
+  // 상승 파티클
+  const pCount = 90;
+  const pGeo = new THREE.BufferGeometry();
+  const pPos = new Float32Array(pCount * 3);
+  const pSpeed = new Float32Array(pCount);
+  for (let i = 0; i < pCount; i++) {
+    const a = Math.random() * Math.PI * 2, r = Math.random() * 1.6;
+    pPos[i * 3] = Math.cos(a) * r;
+    pPos[i * 3 + 1] = Math.random() * 6;
+    pPos[i * 3 + 2] = Math.sin(a) * r;
+    pSpeed[i] = 0.6 + Math.random() * 1.4;
+  }
+  pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+  const points = new THREE.Points(pGeo, new THREE.PointsMaterial({
+    color: '#ffe08a', size: 0.09, transparent: true, opacity: 0.85, depthWrite: false,
+  }));
+  g.add(points);
+
+  // 열쇠 아이콘(회전) 상단
+  const keyMark = new THREE.Group();
+  const kRing = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.05, 8, 20), glow('#ffd75f', 2));
+  keyMark.add(kRing);
+  const kBody = box(0.09, 0.45, 0.05, glow('#ffd75f', 2)); kBody.position.y = -0.36; keyMark.add(kBody);
+  const kTooth = box(0.16, 0.08, 0.05, glow('#ffd75f', 2)); kTooth.position.set(0.07, -0.52, 0); keyMark.add(kTooth);
+  keyMark.position.y = 3.4; g.add(keyMark);
+
+  g.visible = false;
+  scene.add(g);
+  return { group: g, disc, points, keyMark, column, columnInner, ring1, ring2 };
+}
+
 /* ---------- 홀(건물) ---------- */
 
 function buildHall(scene) {
@@ -1302,6 +1396,8 @@ export function buildWorld(scene) {
   const { dust } = buildHall(scene);
   const wallSegments = buildWalls(scene);
   const beacon = makeBeacon(scene);
+  const portal = makeCenterPortal(scene);
+  let portalOpen = false;
 
   scene.add(new THREE.HemisphereLight('#aebedd', '#2a2f3d', 1.8));
   const key = new THREE.DirectionalLight('#ffffff', 1.6);
@@ -1374,6 +1470,13 @@ export function buildWorld(scene) {
     setKeyObtained(v) {
       unlockables[10]?.(v);
     },
+    // 중앙 귀환 포털 열기/닫기
+    setPortalOpen(v) {
+      portalOpen = v;
+      portal.group.visible = v;
+    },
+    isPortalOpen() { return portalOpen; },
+    portalCenter: { x: 0, z: 0 },
     setBeacon(zoneId, color = '#5ee6a8') {
       if (!zoneId) { beacon.group.visible = false; return; }
       const zone = ZONES.find(z => z.id === zoneId);
@@ -1387,10 +1490,29 @@ export function buildWorld(scene) {
     update(dt, camera) {
       t += dt;
       dust.rotation.y = t * 0.01;
+      // GLB 애니메이션 클립(춤 등) 재생
+      for (const m of modelMixers) m.update(dt);
       if (beacon.group.visible) {
         beacon.arrow.position.y = 4.6 + Math.sin(t * 2.5) * 0.25;
         beacon.arrow.rotation.y = t * 1.5;
         beacon.pillar.material.opacity = 0.1 + Math.sin(t * 2) * 0.05;
+      }
+      // 중앙 포털 애니메이션
+      if (portalOpen) {
+        portal.disc.rotation.z = t * 0.8;
+        portal.disc.material.opacity = 0.55 + Math.sin(t * 3) * 0.18;
+        portal.ring1.scale.setScalar(1 + Math.sin(t * 2.2) * 0.03);
+        portal.keyMark.rotation.y = t * 1.4;
+        portal.keyMark.position.y = 3.4 + Math.sin(t * 1.8) * 0.12;
+        portal.column.material.opacity = 0.1 + Math.sin(t * 1.6) * 0.04;
+        const pos = portal.points.geometry.attributes.position;
+        for (let i = 0; i < pos.count; i++) {
+          let y = pos.getY(i) + dt * (0.6 + (i % 7) * 0.2);
+          if (y > 6) y = 0;
+          pos.setY(i, y);
+        }
+        pos.needsUpdate = true;
+        portal.points.rotation.y = t * 0.3;
       }
       for (const e of exhibits) {
         e.update?.(dt);

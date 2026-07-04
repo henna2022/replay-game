@@ -107,8 +107,10 @@ player.setPose(SPAWN.x, SPAWN.z, SPAWN.yaw);
 function syncProgressUI() {
   ui.updateProgress(done);
   for (const id of SEQUENCE) world.setZoneCompleted(id, done.has(id));
-  world.setKeyObtained(done.size >= SEQUENCE.length);
-  world.setBeacon(null); // 자유 순서 — 우측 진척도 패널이 안내
+  const allDone = done.size >= SEQUENCE.length;
+  world.setKeyObtained(allDone);
+  world.setPortalOpen(allDone);      // 10개 미션 완료 시 중앙 포털 개방
+  world.setBeacon(null);             // 자유 순서 — 우측 진척도 패널이 안내
 }
 
 /* ---------- 상호작용 ---------- */
@@ -146,8 +148,15 @@ function handleTap(ndcX, ndcY) {
   }
 }
 
+const RETURN_ID = -99; // 중앙 귀환 포털 프롬프트 id
+
 function interact(zoneId) {
   if (state !== 'playing' || missionOpen) return;
+  // 중앙 귀환 포털
+  if (zoneId === RETURN_ID) {
+    if (done.size >= SEQUENCE.length) startEnding();
+    return;
+  }
   const zone = zoneById(zoneId);
   if (!zone) return;
 
@@ -168,10 +177,9 @@ function interact(zoneId) {
       saveGame();
       syncProgressUI();
       if (done.size >= SEQUENCE.length) {
-        // 10개 미션 완료 → 아웃트로 영상 → 엔딩
+        // 10개 미션 완료 + 황금 열쇠 획득 → 맵 중앙 귀환 포털이 열림 (걸어 들어가면 귀환)
         sfx.portal();
-        ui.toast(svgIcon('key') + ' 황금 열쇠가 빛납니다 — 현실로 귀환합니다!', 2400);
-        setTimeout(() => { if (state === 'playing') startEnding(); }, 2600);
+        ui.toast(svgIcon('key') + ' 황금 열쇠 획득! 맵 <b>중앙에 귀환 포털</b>이 열렸습니다 — 걸어 들어가세요!', 5000);
       } else {
         ui.toast(`${svgIcon('book')} 미션 기록 ${done.size}/10! 남은 전시를 자유롭게 체험하세요.`, 3000);
       }
@@ -183,6 +191,14 @@ function interact(zoneId) {
 
 function updatePrompt() {
   if (state !== 'playing' || missionOpen || !player.enabled) { ui.showPrompt(null); return; }
+  // 중앙 귀환 포털이 열려 있고 가까우면 우선 표시
+  if (world.isPortalOpen()) {
+    const dc = Math.hypot(player.pos.x - world.portalCenter.x, player.pos.z - world.portalCenter.z);
+    if (dc < 4.5) {
+      ui.showPrompt(RETURN_ID, `${svgIcon('key', { size: 15 })} 귀환 포털 — 걸어 들어가 현실로 돌아가기`);
+      return;
+    }
+  }
   let nearest = null, nd = Infinity;
   for (const z of ZONES) {
     const d = Math.hypot(player.pos.x - z.pos[0], player.pos.z - z.pos[1]);
@@ -268,8 +284,12 @@ function startGameplay() {
   player.enabled = true;
   syncProgressUI();
   setTimeout(() => {
-    if (state !== 'playing' || done.size >= SEQUENCE.length) return;
-    ui.toast(`${svgIcon('footprint')} 원하는 전시부터 자유롭게 체험하세요 — 우측 목록에서 진행 상황을 확인!`, 3600);
+    if (state !== 'playing') return;
+    if (done.size >= SEQUENCE.length) {
+      ui.toast(`${svgIcon('key')} 이미 모든 미션 완료! 맵 <b>중앙의 귀환 포털</b>로 걸어 들어가세요.`, 4200);
+    } else {
+      ui.toast(`${svgIcon('footprint')} 원하는 전시부터 자유롭게 체험하세요 — 우측 목록에서 진행 상황을 확인!`, 3600);
+    }
   }, 600);
 }
 
@@ -279,10 +299,8 @@ document.getElementById('btn-start').addEventListener('click', () => {
   ui.showSplash(false);
   state = 'cinema';
   // 통로 시네마틱(도시 불빛 → 포털 → 흡입 → 미스터리 놀이터) → 맵 진입
-  playCinema('passage', () => {
-    if (done.size >= SEQUENCE.length) { state = 'playing'; startEnding(); }
-    else startGameplay();
-  });
+  // 시네마틱 후 항상 맵으로 진입 (10/10 이어하기면 포털이 열린 채로 시작 → 걸어 들어가 귀환)
+  playCinema('passage', () => startGameplay());
 });
 
 document.getElementById('btn-skip').addEventListener('click', () => {
@@ -338,6 +356,11 @@ renderer.setAnimationLoop(() => {
   // 기록장 모달이 열려 있는 동안에는 이동 입력 무시
   if (state === 'playing' && stampbookEl.classList.contains('hidden')) player.update(dt);
   world.update(dt, camera);
+  // 중앙 포털에 걸어 들어가면 귀환
+  if (state === 'playing' && !missionOpen && world.isPortalOpen()) {
+    const dc = Math.hypot(player.pos.x - world.portalCenter.x, player.pos.z - world.portalCenter.z);
+    if (dc < 1.3) startEnding();
+  }
   promptAcc += dt;
   if (promptAcc > 0.2) {
     promptAcc = 0;
