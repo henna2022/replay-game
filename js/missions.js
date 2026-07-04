@@ -1,5 +1,10 @@
 // ===== 존별 미션 (기획 대본 기반: 미니게임 + 퀴즈 + 생각 문답) =====
 import { sfx } from './audio.js';
+import { svgIcon, drawIcon } from './icons.js';
+
+// 인라인 아이콘 헬퍼 (텍스트 크기에 맞춘 기본)
+const ic = (name, size = 18) => svgIcon(name, { size });
+const bigIc = (name, size = 48, color) => svgIcon(name, { size, cls: color ? '' : '' });
 
 const modal = () => document.getElementById('mission-modal');
 const bodyEl = () => document.getElementById('mission-body');
@@ -73,7 +78,7 @@ function showResult(zone, success) {
   if (success) {
     sfx.stamp();
     b.appendChild(h(`<div class="m-result">
-      <div class="big">🏅</div>
+      <div class="big">${bigIc('medal',56)}</div>
       <h3>미션 성공!</h3>
       <p>「${zone.name}」 미션이 아카이브에 기록되었습니다.</p>
     </div>`));
@@ -83,7 +88,7 @@ function showResult(zone, success) {
   } else {
     sfx.bad();
     b.appendChild(h(`<div class="m-result">
-      <div class="big">🤖</div>
+      <div class="big">${bigIc('faceRobot',56)}</div>
       <h3>아쉬워요!</h3>
       <p>괜찮습니다. 다시 도전해 보세요!</p>
     </div>`));
@@ -117,7 +122,7 @@ function runQuiz(root, questions, done) {
           solved = true;
           sfx.ok();
           btn.classList.add('correct');
-          if (q.explain) root.appendChild(h(`<div class="quiz-explain">💡 ${q.explain}</div>`));
+          if (q.explain) root.appendChild(h(`<div class="quiz-explain">${ic('bulb',16)} ${q.explain}</div>`));
           const next = h(`<button class="btn-action">${idx < questions.length - 1 ? '다음 문제' : '완료'}</button>`);
           next.addEventListener('click', () => {
             idx++;
@@ -205,7 +210,7 @@ function runSimon(root, { pads, rounds, playPad, watchText = 'AI가 보여줍니
           round++;
           if (round >= rounds.length) { timer(() => done(true), 600); }
           else {
-            status.textContent = '정확해요! 다음 라운드 🎉';
+            status.textContent = '정확해요! 다음 라운드';
             sfx.ok();
             timer(playSequence, 1100);
           }
@@ -300,7 +305,7 @@ function runDDR(root, done) {
       sfx.hihat();
     }
     flashes.push({ lane, until: now + 180, ok: !!(best && bestDiff < 40) });
-    status.innerHTML = `🤖 로봇 신남 게이지 — 성공 <b>${hits}</b>/${TOTAL} (목표 ${NEED})`;
+    status.innerHTML = `${ic('robot',16)} 로봇 신남 게이지 — 성공 <b>${hits}</b>/${TOTAL} (목표 ${NEED})`;
   }
 
   const onKey = (e) => {
@@ -341,7 +346,8 @@ function runDDR(root, done) {
     ctx.fillRect(14, 12, (W - 28) * ratio, 10);
     ctx.font = '600 12px sans-serif'; ctx.textAlign = 'left';
     ctx.fillStyle = '#9aa3b5';
-    ctx.fillText('🤖 로봇 신남 게이지', 14, 38);
+    drawIcon(ctx, 'robot', 21, 35, 15, '#9aa3b5', 1.6);
+    ctx.fillText('로봇 신남 게이지', 32, 38);
 
     // 노트
     let allDone = true;
@@ -385,7 +391,7 @@ const MISSIONS = {
       if (!ok) return done(false);
       root.innerHTML = '';
       root.appendChild(h(`<div class="m-result" style="padding-bottom:0">
-        <div class="big">🕺🤖🐕</div>
+        <div class="big">${bigIc('dancer',44)}${bigIc('robot',44)}${bigIc('dog',44)}</div>
         <h3>G1과 로봇개가 신나게 춤춥니다!</h3>
         <p>여러분의 스텝을 로봇들이 그대로 배웠어요.<br>마지막으로 무대에 숨은 기술 퀴즈!</p>
       </div>`));
@@ -502,7 +508,7 @@ const MISSIONS = {
       root.appendChild(h(`<p class="m-status" id="arm-status">로봇팔 카메라가 <b>목표 앵글(초록 칸)</b>에 올 때 고정하세요!</p>`));
       const cv = h(`<canvas class="game-canvas" width="440" height="240"></canvas>`);
       root.appendChild(cv);
-      const grabBtn = h(`<button class="btn-action">🦾 앵글 고정!</button>`);
+      const grabBtn = h(`<button class="btn-action">${ic('robotArm',18)} 앵글 고정!</button>`);
       root.appendChild(grabBtn);
       const status = root.querySelector('#arm-status');
       const ctx = cv.getContext('2d');
@@ -554,7 +560,7 @@ const MISSIONS = {
     async function capture(bg) {
       runCleanup();
       root.innerHTML = '';
-      root.appendChild(h(`<p class="m-status">📸 로봇팔 카메라가 당신을 바라봅니다…</p>`));
+      root.appendChild(h(`<p class="m-status">${ic('camera',16)} 로봇팔 카메라가 당신을 바라봅니다…</p>`));
       let stream = null;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
@@ -569,8 +575,7 @@ const MISSIONS = {
       if (!stream) {
         root.appendChild(h(`<p class="m-desc">카메라를 사용할 수 없어 <b>로봇 아바타</b>로 대신 촬영합니다.</p>`));
         pctx.fillStyle = '#22283a'; pctx.fillRect(0, 0, 640, 480);
-        pctx.font = '200px sans-serif'; pctx.textAlign = 'center';
-        pctx.fillText('🤖', 320, 330);
+        drawIcon(pctx, 'faceRobot', 320, 240, 200, '#aeb6c6', 8);
         const go = h(`<button class="btn-action">촬영!</button>`);
         go.addEventListener('click', () => { sfx.snare(); compose(bg, photo); });
         root.appendChild(go);
@@ -589,7 +594,7 @@ const MISSIONS = {
       wrap.appendChild(count);
       root.appendChild(wrap);
 
-      const go = h(`<button class="btn-action">📸 3초 카운트다운 촬영</button>`);
+      const go = h(`<button class="btn-action">${ic('camera',18)} 3초 카운트다운 촬영</button>`);
       go.addEventListener('click', () => {
         go.disabled = true;
         count.classList.remove('hidden');
@@ -642,7 +647,7 @@ const MISSIONS = {
       img.className = 'composite-img';
       root.appendChild(img);
 
-      const qrBtn = h(`<button class="btn-action">📲 QR코드로 사진 가져가기</button>`);
+      const qrBtn = h(`<button class="btn-action">${ic('qr',18)} QR코드로 사진 가져가기</button>`);
       qrBtn.addEventListener('click', () => { qrBtn.disabled = true; makeQR(final); });
       root.appendChild(qrBtn);
       const skip = h(`<button class="btn-ghost">QR 없이 완료</button>`);
@@ -683,7 +688,7 @@ const MISSIONS = {
         const qwrap = h(`<div class="qr-wrap"></div>`);
         qwrap.appendChild(qcv);
         root.appendChild(qwrap);
-        root.appendChild(h(`<p class="qr-notice">⚠️ 이 화면을 지나가면 사진을 다시 저장하기 어려워요.<br>휴대폰으로 QR을 찍어 지금 저장해 주세요.<br>사진은 <b>1시간 뒤 자동 삭제</b>됩니다.</p>`));
+        root.appendChild(h(`<p class="qr-notice">${ic('alert',16)} 이 화면을 지나가면 사진을 다시 저장하기 어려워요.<br>휴대폰으로 QR을 찍어 지금 저장해 주세요.<br>사진은 <b>1시간 뒤 자동 삭제</b>됩니다.</p>`));
         sfx.ok();
       } catch {
         wait.remove();
@@ -709,11 +714,11 @@ const MISSIONS = {
       root.appendChild(qs);
 
       const QA = [
-        ['안녕! 너는 누구야?', '안녕하세요! 저는 상호작용 로봇 리쿠예요. 어르신들께는 말동무가 되어 드리고, 아이들에게는 동화책을 읽어줘요. 📚'],
+        ['안녕! 너는 누구야?', '안녕하세요! 저는 상호작용 로봇 리쿠예요. 어르신들께는 말동무가 되어 드리고, 아이들에게는 동화책을 읽어줘요.'],
         ['너도 감정이 있어?', '저는 사람의 표정과 목소리를 읽고, 거기에 맞는 반응을 만들어요. 그게 "진짜 감정"인지는… 여러분이 판단해 주세요!'],
-        ['눈이 왜 보라색으로 변해?', '제 눈이 보라색이 되면 "듣고 있어요"라는 뜻이에요. 머리에 살짝 손을 올리고 말을 걸어 주세요. 💜'],
+        ['눈이 왜 보라색으로 변해?', '제 눈이 보라색이 되면 "듣고 있어요"라는 뜻이에요. 머리에 살짝 손을 올리고 말을 걸어 주세요.'],
         ['나랑 친구가 될 수 있어?', '물론이죠! 저는 언제나 이야기를 들어줄 준비가 되어 있어요. 그런데… 사람 친구도 꼭 챙기기, 약속이에요!'],
-        ['좋아하는 놀이가 뭐야?', '끝말잇기요! 로봇은 지치지 않으니까 밤새 할 수 있어요. …농담이에요, 배터리는 소중하니까요. 🔋'],
+        ['좋아하는 놀이가 뭐야?', '끝말잇기요! 로봇은 지치지 않으니까 밤새 할 수 있어요. …농담이에요, 배터리는 소중하니까요.'],
       ];
       let asked = 0, busy = false;
 
@@ -747,7 +752,7 @@ const MISSIONS = {
         box.scrollTop = box.scrollHeight;
       }
       function addLiku(text, onEnd) {
-        const bb = h(`<div class="bubble liku"><span class="who">🤖 리쿠</span><span class="msg"></span></div>`);
+        const bb = h(`<div class="bubble liku"><span class="who">${ic('robot',14)} 리쿠</span><span class="msg"></span></div>`);
         box.appendChild(bb);
         const msg = bb.querySelector('.msg');
         const t0 = performance.now();
@@ -810,13 +815,12 @@ const MISSIONS = {
           ctx.setLineDash([]);
         }
         // 하트 파티클
-        ctx.font = '26px sans-serif'; ctx.textAlign = 'center';
         for (let i = hearts.length - 1; i >= 0; i--) {
           const hh2 = hearts[i];
           hh2.y -= 1.4; hh2.a -= 0.012; hh2.x += Math.sin(hh2.y / 14) * 0.8;
           if (hh2.a <= 0) { hearts.splice(i, 1); continue; }
           ctx.globalAlpha = hh2.a;
-          ctx.fillText('💗', hh2.x, hh2.y);
+          drawIcon(ctx, 'heart', hh2.x, hh2.y - 8, 24, '#ff5f9e', 2.2);
         }
         ctx.globalAlpha = 1;
       });
@@ -836,7 +840,7 @@ const MISSIONS = {
           root.querySelector('#pet-n').textContent = pets;
           if (pets >= 5) {
             finished = true;
-            root.querySelector('#pet-status').innerHTML = '💗 러봇이 행복해해요! 팔 안쪽에서 따뜻한 온기가 느껴져요.';
+            root.querySelector('#pet-status').innerHTML = `${ic('heart', 16)} 러봇이 행복해해요! 팔 안쪽에서 따뜻한 온기가 느껴져요.`;
             timer(() => next(), 1500);
           }
         }
@@ -891,8 +895,7 @@ const MISSIONS = {
         ctx.restore();
 
         if (now < bang.until) {
-          ctx.font = '800 30px sans-serif'; ctx.textAlign = 'center';
-          ctx.fillText('💥', bang.x, bang.y);
+          drawIcon(ctx, 'burst', bang.x, bang.y, 34, '#ffd75f', 2.4);
         }
       });
 
@@ -908,12 +911,12 @@ const MISSIONS = {
         root.querySelector('#punch-n').textContent = Math.min(punches, 5);
         if (punches >= 5) {
           doneFlag = true;
-          root.querySelector('#punch-status').innerHTML = '🎈 아무리 밀어도 넘어지지 않아요! 이것이 발루의 <b>동적 평형</b>!';
+          root.querySelector('#punch-status').innerHTML = `${ic('balloon', 16)} 아무리 밀어도 넘어지지 않아요! 이것이 발루의 <b>동적 평형</b>!`;
           timer(() => {
             runCleanup();
             root.innerHTML = '';
             root.appendChild(h(`<div class="m-result">
-              <div class="big">🤖💗🎈</div>
+              <div class="big">${bigIc('robot',44)}${bigIc('heart',44)}${bigIc('balloon',44)}</div>
               <h3>세 로봇 친구와 마음을 나눴어요!</h3>
               <p>말동무 리쿠, 사랑둥이 러봇, 오뚝이 발루 —<br>로봇은 즐거움을 함께 나누는 진짜 친구가 될 수 있을까요?</p>
             </div>`));
@@ -928,12 +931,12 @@ const MISSIONS = {
   // 5. AI사운드 뮤드럼 — 보코와 함께 떨어지는 드럼 노트 연주
   5(root, done) {
     const LANES = 4;
-    const LANE_ICONS = ['🥁', '🪘', '🎩', '🛎️'];
+    const LANE_ICONS = ['drum', 'drum', 'cymbal', 'bell'];
     const LANE_COLORS = ['#ff7878', '#78b4ff', '#ffd75f', '#5ee6a8'];
     const W = 440, H = 340, HIT_Y = 270, FALL_SEC = 2.0;
     const TOTAL = 16, NEED = 12;
 
-    root.appendChild(h(`<p class="m-status" id="drum-status">🐱 보코: “노트가 <b>회색 선</b>에 닿는 순간 그 줄을 탭!” (${NEED}/${TOTAL} 이상)</p>`));
+    root.appendChild(h(`<p class="m-status" id="drum-status">${ic('cat',16)} 보코: “노트가 <b>회색 선</b>에 닿는 순간 그 줄을 탭!” (${NEED}/${TOTAL} 이상)</p>`));
     const cv = h(`<canvas class="game-canvas" width="${W}" height="${H}"></canvas>`);
     root.appendChild(cv);
     const status = root.querySelector('#drum-status');
@@ -971,8 +974,7 @@ const MISSIONS = {
           ctx.fillStyle = f.ok ? 'rgba(94,230,168,.25)' : 'rgba(255,107,107,.22)';
           ctx.fillRect(i * laneW, HIT_Y - 34, laneW, 68);
         }
-        ctx.font = '26px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText(LANE_ICONS[i], i * laneW + laneW / 2, H - 14);
+        drawIcon(ctx, LANE_ICONS[i], i * laneW + laneW / 2, H - 18, 26, LANE_COLORS[i], 2);
       }
 
       // 노트
@@ -1006,11 +1008,11 @@ const MISSIONS = {
             runCleanup(); // 노트 게임의 rAF 중단
             root.innerHTML = '';
             runReflect(root, {
-              lead: '🐱 보코의 질문',
+              lead: `${ic('cat',15)} 보코의 질문`,
               question: '방금은 AI가 짜 놓은 리듬을 그대로 따라 연주했어요. 만약 AI가 알려주는 ‘정답’에만 맞춰 연주한다면, 그것을 나만의 음악이라고 할 수 있을까요?',
               answers: [
                 { t: 'AI 리듬도 내가 연주하면 내 음악', r: '연주하는 손끝의 감정은 AI가 대신할 수 없죠. 도구는 빌려도 마음은 내 것이니까요.' },
-                { t: '내 마음대로 쳐야 진짜 내 음악', r: '박자가 틀려도 내 기분을 담은 연주 — 보코도 가끔은 악보를 덮고 그렇게 연주한대요. 🐱' },
+                { t: '내 마음대로 쳐야 진짜 내 음악', r: '박자가 틀려도 내 기분을 담은 연주 — 보코도 가끔은 악보를 덮고 그렇게 연주한대요.' },
                 { t: '둘을 섞으면 더 좋은 음악이 된다', r: 'AI에게 기본기를 배우고, 그 위에 나만의 감정을 얹는 것. 어쩌면 미래의 음악가는 그렇게 연주할 거예요.' },
               ],
             }, done);
@@ -1038,7 +1040,7 @@ const MISSIONS = {
         best.state = 'hit';
         hits++;
         flashes.push({ lane, until: now + 200, ok: true });
-        status.innerHTML = `🐱 보코: “좋아요!” — 성공 <b>${hits}</b>/${TOTAL}`;
+        status.innerHTML = `${ic('cat',15)} 보코: “좋아요!” — 성공 <b>${hits}</b>/${TOTAL}`;
       } else {
         flashes.push({ lane, until: now + 200, ok: false });
       }
@@ -1076,12 +1078,12 @@ const MISSIONS = {
     function photo() {
       runCleanup(); // 링 게임의 rAF 중단
       root.innerHTML = '';
-      const me = avatar ? `<span style="color:${avatar.color}">${avatar.face}</span>` : '👤';
+      const me = avatar ? `<span style="color:${avatar.color}">${svgIcon(avatar.face, { size: 48 })}</span>` : bigIc('user', 48);
       root.appendChild(h(`<div class="m-result">
-        <div class="big">${me}🎤✨</div>
-        <h3>팬미팅 성공! 찰칵 📸</h3>
+        <div class="big">${me}${bigIc('mic', 44)}${bigIc('spark', 40)}</div>
+        <h3>팬미팅 성공! 찰칵</h3>
         <p>${avatar
-          ? `버추얼 아이돌이 아바타 ‘${avatar.name}’${avatar.face}와 기념사진을 찍었습니다.<br>가상 속에서의 이 만남은 어떤 의미일까요?`
+          ? `버추얼 아이돌이 아바타 ‘${avatar.name}’와 기념사진을 찍었습니다.<br>가상 속에서의 이 만남은 어떤 의미일까요?`
           : '버추얼 아이돌과 기념사진을 찍었습니다.<br>가상 속에서의 이 만남은 어떤 의미일까요?'}</p>
       </div>`));
       const fin = h(`<button class="btn-action">기념사진 저장</button>`);
@@ -1135,7 +1137,7 @@ const MISSIONS = {
   // 7. 디지털 아바타 — 아바타 창조 + 디지털 기록 퀴즈
   7(root, done) {
     const NAMES = ['네온', '스파크', '코스모', '픽셀'];
-    const FACES = ['😀', '😎', '🤖', '🦊'];
+    const FACES = ['faceSmile', 'faceCool', 'faceRobot', 'faceFox'];
     const COLORS = ['#5ee6a8', '#6aa7ff', '#ec5fa3', '#ffd75f'];
     const draft = {};
 
@@ -1154,14 +1156,14 @@ const MISSIONS = {
     }
 
     const step1 = () => pickStep('아바타의 별명을 고르세요.', NAMES, n => `<div style="font-size:16px;font-weight:700">${n}</div>`, 'name', step2);
-    const step2 = () => pickStep('아바타의 얼굴을 고르세요.', FACES, f => f, 'face', step3);
+    const step2 = () => pickStep('아바타의 얼굴을 고르세요.', FACES, f => svgIcon(f, { size: 40 }), 'face', step3);
     const step3 = () => pickStep('아바타의 색을 고르세요.', COLORS,
       c => `<div style="width:34px;height:34px;border-radius:50%;background:${c};margin:0 auto"></div>`, 'color', reveal);
 
     function reveal() {
       root.innerHTML = '';
       root.appendChild(h(`<div class="m-result">
-        <div class="big" style="color:${draft.color}">${draft.face}</div>
+        <div class="big" style="color:${draft.color}">${svgIcon(draft.face, { size: 52 })}</div>
         <h3>아바타 ‘${draft.name}’ 생성 완료!</h3>
         <p>이 아바타는 다음 전시(버추얼 아이돌)까지 여러분을 따라다닙니다.<br>
         방금 입력한 정보들 — 디지털 공간에 저장된 기록은 그리 쉽게 사라지지 않아요.</p>
@@ -1198,7 +1200,7 @@ const MISSIONS = {
     root.appendChild(h(`<p class="m-status" id="soccer-status">슛 1/3 — <b>초록 구간</b>에서 방향을 정하세요!</p>`));
     const cv = h(`<canvas class="game-canvas" width="440" height="290"></canvas>`);
     root.appendChild(cv);
-    const btn = h(`<button class="btn-action">⚽ 방향 결정!</button>`);
+    const btn = h(`<button class="btn-action">${ic('soccer',18)} 방향 결정!</button>`);
     root.appendChild(btn);
     const status = root.querySelector('#soccer-status');
     const ctx = cv.getContext('2d');
@@ -1280,7 +1282,7 @@ const MISSIONS = {
     function afterShot() {
       const s = shots[shots.length - 1];
       sfx[s.goal ? 'goal' : 'kick']();
-      status.innerHTML = `AI 코치: ${s.goal ? '⚽ 골!' : '🧤 노골.'} 파워 <b>${s.power}</b> · 정확도 <b>${s.acc}</b>`;
+      status.innerHTML = `AI 코치: ${s.goal ? `${ic('soccer',15)} 골!` : `${ic('glove',15)} 노골.`} 파워 <b>${s.power}</b> · 정확도 <b>${s.acc}</b>`;
       if (shots.length >= 3) {
         btn.disabled = true;
         timer(() => {
@@ -1288,7 +1290,7 @@ const MISSIONS = {
           root.innerHTML = '';
           const goals = shots.filter(s2 => s2.goal).length;
           root.appendChild(h(`<div class="m-result">
-            <div class="big">📊</div>
+            <div class="big">${bigIc('chart',52)}</div>
             <h3>슛 기록 완료! (${goals}골)</h3>
             <p>AI 코치가 세 번의 슛을 모두 분석해 저장했습니다.<br>
             이 데이터는 <b>데이터 분석실</b>에서 포지션 추천에 사용됩니다!</p>
@@ -1304,7 +1306,7 @@ const MISSIONS = {
       } else {
         phase = 'dir';
         btn.disabled = false;
-        btn.textContent = '⚽ 방향 결정!';
+        btn.innerHTML = `${ic('soccer', 18)} 방향 결정!`;
         newKeeper();
         timer(() => {
           status.innerHTML = `슛 ${shots.length + 1}/3 — <b>초록 구간</b>에서 방향을 정하세요!`;
@@ -1317,7 +1319,7 @@ const MISSIONS = {
         lockedX = cursor;
         phase = 'power';
         power = 0; pDir = 1;
-        btn.textContent = '💥 슛!';
+        btn.innerHTML = `${ic('burst', 18)} 슛!`;
         status.innerHTML = '파워를 모아 <b>슛</b>! (노란 구간까지)';
         sfx.tap();
       } else if (phase === 'power') {
@@ -1380,17 +1382,18 @@ const MISSIONS = {
       const goals = shots ? shots.filter(s => s.goal).length : 1;
 
       let pos, why;
-      if (power >= 70 && acc >= 70) { pos = '스트라이커 ⚽'; why = '강한 파워와 높은 정확도 — 골문 앞에서 가장 위협적인 유형입니다.'; }
-      else if (acc >= 70) { pos = '미드필더 🎯'; why = '정확도가 뛰어나요. 경기를 조립하는 정교한 패스 마스터 유형입니다.'; }
-      else if (power >= 70) { pos = '수비수 🛡️'; why = '파워가 좋아요. 위기 상황을 시원하게 걷어내는 든든한 유형입니다.'; }
-      else { pos = '골키퍼 🧤'; why = '침착한 판단력이 돋보여요. 마지막 순간 팀을 구하는 수호신 유형입니다.'; }
+      if (power >= 70 && acc >= 70) { pos = '스트라이커|soccer'; why = '강한 파워와 높은 정확도 — 골문 앞에서 가장 위협적인 유형입니다.'; }
+      else if (acc >= 70) { pos = '미드필더|target'; why = '정확도가 뛰어나요. 경기를 조립하는 정교한 패스 마스터 유형입니다.'; }
+      else if (power >= 70) { pos = '수비수|shield'; why = '파워가 좋아요. 위기 상황을 시원하게 걷어내는 든든한 유형입니다.'; }
+      else { pos = '골키퍼|glove'; why = '침착한 판단력이 돋보여요. 마지막 순간 팀을 구하는 수호신 유형입니다.'; }
 
+      const [posName, posIcon] = pos.split('|');
       root.innerHTML = '';
       root.appendChild(h(`<div>
         <p class="quiz-progress">AI 코치 분석 결과 ${shots ? '' : '(표준 데이터 기준)'}</p>
         <div class="m-result" style="padding-top:6px">
-          <div class="big">${pos.split(' ')[1] || '📊'}</div>
-          <h3>추천 포지션: ${pos}</h3>
+          <div class="big">${bigIc(posIcon || 'chart', 52)}</div>
+          <h3>추천 포지션: ${posName}</h3>
           <p>${why}</p>
         </div>
         <div class="stat-bars">
@@ -1418,10 +1421,10 @@ const MISSIONS = {
   // 10. 운과 확률 — 다트로 풍선을 터뜨려 황금 열쇠 찾기
   10(root, done) {
     const W = 440, H = 300;
-    root.appendChild(h(`<p class="m-status" id="dart-status">움직이는 조준점으로 풍선을 노리세요. 어딘가에 <b>🔑 황금 열쇠</b>가!</p>`));
+    root.appendChild(h(`<p class="m-status" id="dart-status">움직이는 조준점으로 풍선을 노리세요. 어딘가에 <b>${ic('key',15)} 황금 열쇠</b>가!</p>`));
     const cv = h(`<canvas class="game-canvas" width="${W}" height="${H}"></canvas>`);
     root.appendChild(cv);
-    const throwBtn = h(`<button class="btn-action">🎯 다트 던지기!</button>`);
+    const throwBtn = h(`<button class="btn-action">${ic('target',18)} 다트 던지기!</button>`);
     root.appendChild(throwBtn);
     const status = root.querySelector('#dart-status');
     const ctx = cv.getContext('2d');
@@ -1445,8 +1448,7 @@ const MISSIONS = {
       // 풍선
       balloons.forEach((b, i) => {
         if (b.popped) {
-          ctx.font = '26px sans-serif'; ctx.textAlign = 'center';
-          ctx.fillText(b.hasKey ? '🔑' : '⭐', b.x, b.y + 9);
+          drawIcon(ctx, b.hasKey ? 'key' : 'star', b.x, b.y, 26, b.hasKey ? '#ffd75f' : '#9aa3b5', 2);
         } else {
           const bob = Math.sin(t * 1.6 + i) * 3;
           ctx.fillStyle = COLORS[i];
@@ -1475,8 +1477,7 @@ const MISSIONS = {
         const p = Math.min(1, dartAnim.t);
         const dx = W / 2 + (dartAnim.x - W / 2) * p;
         const dy = H + 10 + (dartAnim.y - H - 10) * p;
-        ctx.font = '20px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText('🎯', dx, dy);
+        drawIcon(ctx, 'target', dx, dy, 22, '#5ee6a8', 2);
         if (p >= 1) { resolveThrow(dartAnim.x, dartAnim.y); dartAnim = null; }
       }
 
@@ -1493,10 +1494,10 @@ const MISSIONS = {
           foundKey = true;
           sfx.stamp();
           throwBtn.disabled = true;
-          status.innerHTML = `🔑 <b>황금 열쇠 발견!</b> (다트 ${throws}개 만에)`;
+          status.innerHTML = `${ic('key',16)} <b>황금 열쇠 발견!</b> (다트 ${throws}개 만에)`;
           timer(() => reveal(), 900);
         } else {
-          status.innerHTML = `⭐ 펑! 열쇠는 없었어요. 계속 던져 보세요!`;
+          status.innerHTML = `${ic('star',16)} 펑! 열쇠는 없었어요. 계속 던져 보세요!`;
         }
       } else {
         sfx.bad();
@@ -1509,7 +1510,7 @@ const MISSIONS = {
       runCleanup(); // 다트 게임의 rAF 중단
       root.innerHTML = '';
       root.appendChild(h(`<div class="m-result">
-        <div class="big">🔑</div>
+        <div class="big">${bigIc('key',52)}</div>
         <h3>황금 열쇠를 찾았다! (다트 ${throws}개)</h3>
         <p>“와, 운이 좋았다!” 라고 느끼셨나요?<br>
         사실 이 게임 뒤에는 <b>난수 생성 알고리즘</b>이 숨어 있습니다.<br>
@@ -1541,7 +1542,7 @@ const MISSIONS = {
 
   // 11. 아메카 — 표정 기억 매칭 + 자유도 퀴즈
   11(root, done) {
-    const FACES = ['😀', '😢', '😡', '😲', '😎', '🤔', '🥰', '😉'];
+    const FACES = ['faceSmile', 'faceSad', 'faceAngry', 'faceSurprise', 'faceCool', 'faceThink', 'faceLove', 'faceWink'];
     let round = 0;
     const ROUNDS = 3;
 
@@ -1549,17 +1550,17 @@ const MISSIONS = {
       root.innerHTML = '';
       const target = FACES[Math.floor(Math.random() * FACES.length)];
       root.appendChild(h(`<p class="m-status">라운드 <b>${round + 1}/${ROUNDS}</b> — 아메카의 표정을 기억하세요!</p>`));
-      const show = h(`<div class="face-target">${target}</div>`);
+      const show = h(`<div class="face-target">${svgIcon(target, { size: 76 })}</div>`);
       root.appendChild(show);
 
       timer(() => {
-        show.textContent = '🤖';
+        show.innerHTML = svgIcon('faceRobot', { size: 76 });
         const opts = new Set([target]);
         while (opts.size < 4) opts.add(FACES[Math.floor(Math.random() * FACES.length)]);
         const arr = [...opts].sort(() => Math.random() - 0.5);
         const grid = h(`<div class="face-opts"></div>`);
         arr.forEach(f => {
-          const b = h(`<button class="face-opt">${f}</button>`);
+          const b = h(`<button class="face-opt">${svgIcon(f, { size: 40 })}</button>`);
           b.addEventListener('click', () => {
             if (f === target) {
               sfx.ok();

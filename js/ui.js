@@ -1,8 +1,10 @@
 // ===== HUD / 기록장 / 토스트 / 타임아웃 경고 / 엔딩 =====
 import { ZONES, SEQUENCE } from './config.js';
 import { sfx } from './audio.js';
+import { svgIcon } from './icons.js';
 
 const $ = (id) => document.getElementById(id);
+const CHECK = svgIcon('check', { size: 14 });
 
 let toastTimer = null;
 
@@ -90,12 +92,12 @@ export const ui = {
       if (el) {
         el.classList.toggle('done', isDone);
         el.classList.remove('next');
-        el.querySelector('.s-mark').textContent = isDone ? '✓' : '·';
+        el.querySelector('.s-mark').innerHTML = isDone ? CHECK : '·';
       }
       const row = $(`hp-${zoneId}`);
       if (row) {
         row.classList.toggle('done', isDone);
-        row.querySelector('.hp-mark').textContent = isDone ? '✓' : '○';
+        row.querySelector('.hp-mark').innerHTML = isDone ? CHECK : '○';
       }
     });
   },
@@ -108,9 +110,10 @@ export const ui = {
       p.classList.add('hidden');
       return;
     }
-    if (this._promptZoneId === zoneId && !p.classList.contains('hidden') && p.textContent === text) return;
+    if (this._promptZoneId === zoneId && !p.classList.contains('hidden') && p._html === text) return;
     this._promptZoneId = zoneId;
-    p.textContent = text;
+    p._html = text;
+    p.innerHTML = text;
     p.classList.remove('hidden');
   },
 

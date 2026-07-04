@@ -10,6 +10,9 @@ import { initMissions, openMission, closeMission, missionData } from './missions
 import { playCinema, finishCinema } from './cinema.js';
 import { ui } from './ui.js';
 import { sfx } from './audio.js';
+import { svgIcon, hydrateIcons } from './icons.js';
+
+hydrateIcons(document); // 정적 HTML의 data-icon → 인라인 SVG
 
 /* ---------- 렌더러 / 씬 ---------- */
 
@@ -167,10 +170,10 @@ function interact(zoneId) {
       if (done.size >= SEQUENCE.length) {
         // 10개 미션 완료 → 아웃트로 영상 → 엔딩
         sfx.portal();
-        ui.toast('🔑 황금 열쇠가 빛납니다 — 현실로 귀환합니다!', 2400);
+        ui.toast(svgIcon('key') + ' 황금 열쇠가 빛납니다 — 현실로 귀환합니다!', 2400);
         setTimeout(() => { if (state === 'playing') startEnding(); }, 2600);
       } else {
-        ui.toast(`📓 미션 기록 ${done.size}/10! 남은 전시를 자유롭게 체험하세요.`, 3000);
+        ui.toast(`${svgIcon('book')} 미션 기록 ${done.size}/10! 남은 전시를 자유롭게 체험하세요.`, 3000);
       }
     }
   });
@@ -190,7 +193,7 @@ function updatePrompt() {
   if (!nearest) { ui.showPrompt(null); return; }
 
   const label = done.has(nearest.id)
-    ? `✓ 「${nearest.name}」 다시 체험하기`
+    ? `${svgIcon('check', { size: 15 })} 「${nearest.name}」 다시 체험하기`
     : `미션 ${nearest.id - 1} — 「${nearest.name}」 시작하기`;
   ui.showPrompt(nearest.id, label);
 }
@@ -266,7 +269,7 @@ function startGameplay() {
   syncProgressUI();
   setTimeout(() => {
     if (state !== 'playing' || done.size >= SEQUENCE.length) return;
-    ui.toast('👣 원하는 전시부터 자유롭게 체험하세요 — 우측 목록에서 진행 상황을 확인!', 3600);
+    ui.toast(`${svgIcon('footprint')} 원하는 전시부터 자유롭게 체험하세요 — 우측 목록에서 진행 상황을 확인!`, 3600);
   }, 600);
 }
 

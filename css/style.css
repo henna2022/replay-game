@@ -59,7 +59,16 @@ canvas.game { display: block; position: fixed; inset: 0; }
   background: var(--panel); border: 1px solid var(--line);
   border-radius: 14px; padding: 16px 20px; font-size: 14px; color: var(--dim);
 }
-.ctl-icon { margin-right: 10px; }
+.ctl-icon { margin-right: 10px; display: inline-flex; width: 20px; justify-content: center; color: var(--accent); }
+
+/* 인라인 라인 아이콘 공통 */
+.lni { display: inline-block; vertical-align: -0.18em; flex: none; }
+.btn-ic { display: inline-flex; vertical-align: -0.18em; margin-right: 5px; }
+.h-ic { display: inline-flex; vertical-align: -0.16em; color: var(--accent); }
+.m-status .lni, .toast .lni, #prompt .lni, .quiz-explain .lni { vertical-align: -0.2em; }
+.face-target .lni, .face-opt .lni { vertical-align: middle; }
+.m-result .big .lni { vertical-align: middle; }
+.hp-mark .lni, .s-mark .lni { vertical-align: -0.2em; }
 .splash-continue { margin-top: 14px; font-size: 13px; color: var(--dim); }
 
 .btn-primary {

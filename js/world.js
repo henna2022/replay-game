@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { ZONES, HALL_RADIUS, WALLS, FACILITY } from './config.js';
+import { drawIcon } from './icons.js';
 
 const texLoader = new THREE.TextureLoader();
 const gltfLoader = new GLTFLoader();
@@ -155,8 +156,15 @@ function makePhotoPanel(zone) {
   photo.userData.archive = { zoneId, src, title: `미션 ${zoneId - 1}. ${zone.missionTitle}` };
   g.add(photo);
 
-  // "탭하여 읽기" 안내
-  const hintTex = makeLabel('📖 탭하여 설명 읽기', { color: '#0b1410', bg: '#5ee6a8', size: 58, w: 640, h: 120 });
+  // "탭하여 읽기" 안내 (아이콘 + 텍스트)
+  const hintTex = canvasTex(640, 120, (ctx) => {
+    ctx.fillStyle = '#5ee6a8'; ctx.fillRect(0, 0, 640, 120);
+    drawIcon(ctx, 'book', 150, 60, 52, '#0b1410', 4);
+    ctx.fillStyle = '#0b1410';
+    ctx.font = '800 58px "Pretendard","Apple SD Gothic Neo",sans-serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText('탭하여 설명 읽기', 195, 66);
+  });
   const hint = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.28), new THREE.MeshBasicMaterial({ map: hintTex }));
   hint.position.set(0, 0.2, 0.06);
   g.add(hint);
@@ -170,7 +178,13 @@ function makePhotoPanel(zone) {
 }
 
 function makeCheckMark() {
-  const tex = makeLabel('✓ 기록 완료', { color: '#5ee6a8', size: 96, w: 512, h: 160 });
+  const tex = canvasTex(512, 160, (ctx) => {
+    drawIcon(ctx, 'check', 110, 80, 84, '#5ee6a8', 8);
+    ctx.fillStyle = '#5ee6a8';
+    ctx.font = '800 96px "Pretendard","Apple SD Gothic Neo",sans-serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText('기록 완료', 165, 88);
+  });
   const m = new THREE.Mesh(
     new THREE.PlaneGeometry(1.8, 0.55),
     new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.95, depthWrite: false })
@@ -1231,7 +1245,18 @@ function buildHall(scene) {
   ceil.position.y = 7;
   scene.add(ceil);
 
-  const entTex = makeLabel('⬆ ENTRANCE', { color: '#9aa3b5', size: 72, w: 768, h: 160 });
+  const entTex = canvasTex(768, 160, (ctx) => {
+    // 위 방향 화살표 (chevron + shaft)
+    ctx.strokeStyle = '#9aa3b5'; ctx.lineWidth = 8; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(160, 62); ctx.lineTo(190, 34); ctx.lineTo(220, 62);
+    ctx.moveTo(190, 34); ctx.lineTo(190, 108);
+    ctx.stroke();
+    ctx.fillStyle = '#9aa3b5';
+    ctx.font = '800 72px "Pretendard","Apple SD Gothic Neo",sans-serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText('ENTRANCE', 250, 84);
+  });
   const ent = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 0.62), new THREE.MeshBasicMaterial({ map: entTex, transparent: true }));
   ent.position.set(0, 2.6, HALL_RADIUS - 0.4);
   ent.rotation.y = Math.PI;
