@@ -855,12 +855,13 @@ const MISSIONS = {
       runCleanup();
       root.innerHTML = '';
       root.appendChild(h(`<p class="m-status" id="punch-status">3/3 · <b>발루</b> 펀치! — 밀어도 절대 넘어지지 않아요 (<b id="punch-n">0</b>/5)</p>`));
-      const cv = h(`<canvas class="game-canvas" width="440" height="320"></canvas>`);
+      const cv = h(`<canvas class="game-canvas" width="440" height="470"></canvas>`);
       root.appendChild(cv);
       const ctx = cv.getContext('2d');
       let ang = 0, vel = 0, punches = 0, doneFlag = false;
       let last = performance.now();
       let bang = { until: 0, x: 0, y: 0 };
+      const FLOOR_Y = 442;
 
       // 실제 발루 모델(balu.glb) 스프라이트 — 준비되면 이 이미지를 회전해서 사용
       let baluImg = null;
@@ -874,16 +875,16 @@ const MISSIONS = {
         vel += (-16 * ang - 2.2 * vel) * dt;
         ang += vel * dt;
 
-        ctx.clearRect(0, 0, 440, 320);
+        ctx.clearRect(0, 0, 440, 470);
         ctx.fillStyle = 'rgba(255,255,255,.06)';
-        ctx.fillRect(60, 292, 320, 6);
+        ctx.fillRect(60, FLOOR_Y, 320, 6);
 
         ctx.save();
-        ctx.translate(220, 292);
+        ctx.translate(220, FLOOR_Y);
         ctx.rotate(ang);
         if (baluImg) {
-          // 실제 발루 모델 스프라이트 (바닥에 발이 닿도록 아래 정렬)
-          const dh = 250, dw = dh * (baluImg.width / baluImg.height);
+          // 실제 발루 모델 스프라이트 (바닥에 발이 닿도록 아래 정렬) — 2배 크기
+          const dh = 500, dw = dh * (baluImg.width / baluImg.height);
           ctx.drawImage(baluImg, -dw / 2, -dh, dw, dh);
         } else {
           // 로딩 전 폴백 (은박 풍선 + 가는 다리)
@@ -916,7 +917,7 @@ const MISSIONS = {
         const dir = x < 220 ? 1 : -1; // 왼쪽에서 치면 오른쪽으로 기울어짐
         vel += dir * (4.2 + (punches % 3) * 0.5);
         punches++;
-        bang = { until: performance.now() + 300, x: 220 - dir * 70, y: 140 };
+        bang = { until: performance.now() + 300, x: 220 - dir * 110, y: 210 };
         sfx.kick();
         root.querySelector('#punch-n').textContent = Math.min(punches, 5);
         if (punches >= 5) {

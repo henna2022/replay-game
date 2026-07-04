@@ -881,7 +881,7 @@ const builders = {
     const neonL = box(0.04, 1.7, 0.04, glow('#ff4fd8', 1.8)); neonL.position.set(-1.48, 1.2, 1.95); g.add(neonL);
     const neonR = neonL.clone(); neonR.position.x = 1.48; g.add(neonR);
 
-    // 노란 공 + 끈 (오른쪽 벽 앵커로 연결)
+    // 공 + 끈 (오른쪽 벽 앵커로 연결)
     const ball = sph(0.2, mat('#f2c229', { roughness: 0.5 }), 14, 12);
     ball.position.set(0.1, 0.28, 1.1); g.add(ball);
     const tether = cyl(0.005, 0.005, 1.85, mat('#26282e'), 4);
@@ -892,13 +892,26 @@ const builders = {
     const anchor = box(0.06, 0.06, 0.06, mat('#26282e'));
     anchor.position.set(1.6, 1.72, 0.98); g.add(anchor);
 
+    // ── 실제 3D 모델 슬롯: 축구공 (soccer_ball.glb 있으면 노란 공 교체) ──
+    let ballModel = null;
+    loadModelSlot(g, 'assets/models/soccer_ball.glb', {
+      height: 0.4, x: 0.1, y: 0.08, z: 1.1,
+      hide: [ball], onLoad: (w) => { ballModel = w; },
+    });
+
     let t = 0;
     return {
       group: g,
       update(dt) {
         t += dt;
-        ball.rotation.z = Math.sin(t * 0.8) * 0.4;
-        ball.position.x = 0.1 + Math.sin(t * 0.8) * 0.05;
+        if (ballModel) {
+          ballModel.rotation.z = Math.sin(t * 0.8) * 0.4;
+          ballModel.rotation.y = t * 0.6;
+          ballModel.position.x = 0.1 + Math.sin(t * 0.8) * 0.05;
+        } else {
+          ball.rotation.z = Math.sin(t * 0.8) * 0.4;
+          ball.position.x = 0.1 + Math.sin(t * 0.8) * 0.05;
+        }
         neonL.material.emissiveIntensity = 1.5 + Math.sin(t * 2.2) * 0.5;
         neonR.material.emissiveIntensity = 1.5 + Math.sin(t * 2.2 + 1) * 0.5;
       },
