@@ -1,6 +1,7 @@
 // ===== 존별 미션 (기획 대본 기반: 미니게임 + 퀴즈 + 생각 문답) =====
 import { sfx } from './audio.js';
 import { svgIcon, drawIcon } from './icons.js';
+import { getModelSprite } from './modelSprite.js';
 
 // 인라인 아이콘 헬퍼 (텍스트 크기에 맞춘 기본)
 const ic = (name, size = 18) => svgIcon(name, { size });
@@ -861,6 +862,11 @@ const MISSIONS = {
       let last = performance.now();
       let bang = { until: 0, x: 0, y: 0 };
 
+      // 실제 발루 모델(balu.glb) 스프라이트 — 준비되면 이 이미지를 회전해서 사용
+      let baluImg = null;
+      Promise.resolve(getModelSprite('assets/models/balu.glb', { w: 240, h: 400 }))
+        .then((img) => { baluImg = img; });
+
       raf((now) => {
         const dt = Math.min(0.04, (now - last) / 1000);
         last = now;
@@ -875,23 +881,27 @@ const MISSIONS = {
         ctx.save();
         ctx.translate(220, 292);
         ctx.rotate(ang);
-        // 가는 다리
-        ctx.strokeStyle = '#26282e'; ctx.lineWidth = 5; ctx.lineCap = 'round';
-        ctx.fillStyle = '#26282e';
-        for (const lx of [-20, 20]) {
-          ctx.beginPath(); ctx.moveTo(lx, 0); ctx.lineTo(lx * 0.7, -95); ctx.stroke();
-          ctx.fillRect(lx - 14, -6, 28, 8);
+        if (baluImg) {
+          // 실제 발루 모델 스프라이트 (바닥에 발이 닿도록 아래 정렬)
+          const dh = 250, dw = dh * (baluImg.width / baluImg.height);
+          ctx.drawImage(baluImg, -dw / 2, -dh, dw, dh);
+        } else {
+          // 로딩 전 폴백 (은박 풍선 + 가는 다리)
+          ctx.strokeStyle = '#26282e'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+          ctx.fillStyle = '#26282e';
+          for (const lx of [-20, 20]) {
+            ctx.beginPath(); ctx.moveTo(lx, 0); ctx.lineTo(lx * 0.7, -95); ctx.stroke();
+            ctx.fillRect(lx - 14, -6, 28, 8);
+          }
+          const foil = ctx.createLinearGradient(-60, -250, 60, -100);
+          foil.addColorStop(0, '#f0f2f6'); foil.addColorStop(0.4, '#b9bfc9');
+          foil.addColorStop(0.6, '#e6e9ee'); foil.addColorStop(1, '#8f95a1');
+          ctx.fillStyle = foil;
+          ctx.beginPath(); ctx.ellipse(0, -175, 55, 82, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#3a3f4a';
+          ctx.beginPath(); ctx.arc(-16, -195, 6, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(16, -195, 6, 0, Math.PI * 2); ctx.fill();
         }
-        // 은박 풍선 몸통
-        const foil = ctx.createLinearGradient(-60, -250, 60, -100);
-        foil.addColorStop(0, '#f0f2f6'); foil.addColorStop(0.4, '#b9bfc9');
-        foil.addColorStop(0.6, '#e6e9ee'); foil.addColorStop(1, '#8f95a1');
-        ctx.fillStyle = foil;
-        ctx.beginPath(); ctx.ellipse(0, -175, 55, 82, 0, 0, Math.PI * 2); ctx.fill();
-        // 눈
-        ctx.fillStyle = '#3a3f4a';
-        ctx.beginPath(); ctx.arc(-16, -195, 6, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc(16, -195, 6, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
 
         if (now < bang.until) {

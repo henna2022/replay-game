@@ -111,20 +111,20 @@ function makeSignLabel(missionNo, title) {
 
 function makeZoneSign(zone) {
   const g = new THREE.Group();
-  const post = cyl(0.05, 0.05, 2.6, mat('#3a4152'));
-  post.position.y = 1.3;
+  const post = cyl(0.05, 0.05, 3.6, mat('#3a4152'));
+  post.position.y = 1.8;
   g.add(post);
 
   const tex = makeSignLabel(zone.id - 1, zone.missionTitle);
   const panel = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 0.9), new THREE.MeshBasicMaterial({ map: tex }));
-  panel.position.y = 2.95;
+  panel.position.y = 3.95;
   g.add(panel);
   const panelBack = panel.clone();
   panelBack.rotation.y = Math.PI;
   g.add(panelBack);
 
   const dot = sph(0.14, glow(zone.color, 1.4), 12, 12);
-  dot.position.y = 3.55;
+  dot.position.y = 4.55;
   g.add(dot);
   return g;
 }
@@ -1313,16 +1313,16 @@ export function buildWorld(scene) {
     root.add(built.group);
 
     const sign = makeZoneSign(zone);
-    sign.position.set(-2.4, 0, 0.8);
+    sign.position.set(-2.7, 0, 1.7);
     root.add(sign);
     const photoPanel = makePhotoPanel(zone);
-    photoPanel.group.position.set(2.6, 0, 0.3);
-    photoPanel.group.rotation.y = -0.35;
+    photoPanel.group.position.set(2.9, 0, 1.2);
+    photoPanel.group.rotation.y = -0.45;
     root.add(photoPanel.group);
     archivePanels.push(photoPanel.panel);
 
     const check = makeCheckMark();
-    check.position.set(0, 3.9, 0);
+    check.position.set(0, 4.5, 0);
     root.add(check);
 
     const hit = new THREE.Mesh(
@@ -1335,7 +1335,9 @@ export function buildWorld(scene) {
     hitboxes.push(hit);
 
     scene.add(root);
-    colliders.push({ x, z, r: 2.1 });
+    // 존별 전시물 footprint에 맞춘 충돌 반경 (플레이어가 전시물/벽을 통과 못 하도록)
+    const COLLIDER_R = { 2: 2.8, 3: 2.8, 4: 2.5, 5: 2.7, 6: 2.4, 7: 2.7, 8: 3.0, 9: 2.6, 10: 2.6, 11: 2.4 };
+    colliders.push({ x, z, r: COLLIDER_R[zone.id] || 2.4 });
 
     if (built.setUnlocked) unlockables[zone.id] = built.setUnlocked;
 
