@@ -87,56 +87,86 @@ function makeLabel(text, { color = '#ffffff', bg = null, size = 90, w = 1024, h 
   });
 }
 
+// 2줄 자동 맞춤 라벨 ("미션 N" + 제목)
+function makeSignLabel(missionNo, title) {
+  const w = 1400, h = 360;
+  return canvasTex(w, h, (ctx) => {
+    ctx.fillStyle = '#161a24'; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = '#5ee6a8';
+    ctx.font = '800 82px "Pretendard","Apple SD Gothic Neo",sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(`미션 ${missionNo}`, w / 2, 96);
+    // 제목: 폭에 맞게 폰트 자동 축소
+    let size = 92;
+    ctx.fillStyle = '#ffffff';
+    do {
+      ctx.font = `800 ${size}px "Pretendard","Apple SD Gothic Neo",sans-serif`;
+      if (ctx.measureText(title).width <= w - 80) break;
+      size -= 4;
+    } while (size > 40);
+    ctx.fillText(title, w / 2, 236);
+  });
+}
+
 function makeZoneSign(zone) {
   const g = new THREE.Group();
   const post = cyl(0.05, 0.05, 2.6, mat('#3a4152'));
   post.position.y = 1.3;
   g.add(post);
 
-  const tex = makeLabel(`${zone.id - 1}  ${zone.name}`, { color: '#ffffff', bg: '#161a24', size: 76 });
-  const panel = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.5), new THREE.MeshBasicMaterial({ map: tex }));
-  panel.position.y = 2.75;
+  const tex = makeSignLabel(zone.id - 1, zone.missionTitle);
+  const panel = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 0.9), new THREE.MeshBasicMaterial({ map: tex }));
+  panel.position.y = 2.95;
   g.add(panel);
   const panelBack = panel.clone();
   panelBack.rotation.y = Math.PI;
   g.add(panelBack);
 
   const dot = sph(0.14, glow(zone.color, 1.4), 12, 12);
-  dot.position.y = 3.15;
+  dot.position.y = 3.55;
   g.add(dot);
   return g;
 }
 
-// 사진 아카이브 액자 — assets/photos/zone-XX.jpg 가 있으면 자동 표시
-function makePhotoPanel(zoneId) {
+// 미션 설명 안내판 액자 — assets/photos/zone-XX.jpg 를 세로형으로 표시, 탭하면 확대
+function makePhotoPanel(zone) {
+  const zoneId = zone.id;
+  const src = `assets/photos/zone-${String(zoneId).padStart(2, '0')}.jpg`;
   const g = new THREE.Group();
-  const frame = box(2.5, 1.75, 0.08, mat('#262c3a'));
-  frame.position.y = 1.7;
+
+  // 세로형 프레임 (안내판 비율 ~3:4)
+  const PW = 1.85, PH = 2.45;
+  const frame = box(PW + 0.12, PH + 0.12, 0.08, mat('#20242e'));
+  frame.position.y = 1.55;
   g.add(frame);
 
-  const placeholder = canvasTex(512, 352, (ctx) => {
-    ctx.fillStyle = '#10131c'; ctx.fillRect(0, 0, 512, 352);
+  const placeholder = canvasTex(360, 480, (ctx) => {
+    ctx.fillStyle = '#10131c'; ctx.fillRect(0, 0, 360, 480);
     ctx.strokeStyle = '#2c3444'; ctx.lineWidth = 3;
-    ctx.strokeRect(14, 14, 484, 324);
+    ctx.strokeRect(12, 12, 336, 456);
     ctx.fillStyle = '#3d465c';
-    ctx.font = '700 44px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText('PHOTO ARCHIVE', 256, 160);
-    ctx.font = '500 26px sans-serif';
-    ctx.fillText(`zone-${String(zoneId).padStart(2, '0')}.jpg`, 256, 215);
+    ctx.font = '700 30px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('미션 안내판', 180, 230);
   });
 
   const photoMat = new THREE.MeshBasicMaterial({ map: placeholder });
-  const photo = new THREE.Mesh(new THREE.PlaneGeometry(2.3, 1.55), photoMat);
-  photo.position.set(0, 1.7, 0.05);
+  const photo = new THREE.Mesh(new THREE.PlaneGeometry(PW, PH), photoMat);
+  photo.position.set(0, 1.55, 0.05);
+  photo.userData.archive = { zoneId, src, title: `미션 ${zoneId - 1}. ${zone.missionTitle}` };
   g.add(photo);
 
-  texLoader.load(
-    `assets/photos/zone-${String(zoneId).padStart(2, '0')}.jpg`,
+  // "탭하여 읽기" 안내
+  const hintTex = makeLabel('📖 탭하여 설명 읽기', { color: '#0b1410', bg: '#5ee6a8', size: 58, w: 640, h: 120 });
+  const hint = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.28), new THREE.MeshBasicMaterial({ map: hintTex }));
+  hint.position.set(0, 0.2, 0.06);
+  g.add(hint);
+
+  texLoader.load(src,
     (tex) => { tex.colorSpace = THREE.SRGBColorSpace; photoMat.map = tex; photoMat.needsUpdate = true; },
     undefined,
     () => {}
   );
-  return g;
+  return { group: g, panel: photo };
 }
 
 function makeCheckMark() {
@@ -1246,6 +1276,7 @@ export function buildWorld(scene) {
   const exhibits = [];
   const colliders = [];
   const hitboxes = [];
+  const archivePanels = [];
   const unlockables = {};
 
   for (const zone of ZONES) {
@@ -1257,12 +1288,13 @@ export function buildWorld(scene) {
     root.add(built.group);
 
     const sign = makeZoneSign(zone);
-    sign.position.set(-2.2, 0, 0.8);
+    sign.position.set(-2.4, 0, 0.8);
     root.add(sign);
-    const photo = makePhotoPanel(zone.id);
-    photo.position.set(2.4, 0, 0.3);
-    photo.rotation.y = -0.3;
-    root.add(photo);
+    const photoPanel = makePhotoPanel(zone);
+    photoPanel.group.position.set(2.6, 0, 0.3);
+    photoPanel.group.rotation.y = -0.35;
+    root.add(photoPanel.group);
+    archivePanels.push(photoPanel.panel);
 
     const check = makeCheckMark();
     check.position.set(0, 3.9, 0);
@@ -1295,6 +1327,7 @@ export function buildWorld(scene) {
     colliders,
     walls: wallSegments,
     hitboxes,
+    archivePanels,
     setZoneCompleted(zoneId, v = true) {
       exhibits.find(e => e.zone.id === zoneId)?.setCompleted(v);
     },

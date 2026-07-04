@@ -56,6 +56,27 @@ export const ui = {
       sfx.tap();
       onIdleContinue();
     });
+
+    // 미션 안내판 확대 뷰어 닫기
+    const closeArchive = () => {
+      sfx.tap();
+      $('archive-viewer').classList.add('hidden');
+      $('av-img').removeAttribute('src');
+      this._onArchiveClose?.();
+      this._onArchiveClose = null;
+    };
+    $('av-close').addEventListener('click', closeArchive);
+    $('archive-viewer').addEventListener('click', (e) => { if (e.target.id === 'archive-viewer') closeArchive(); });
+  },
+
+  // 미션 안내판 확대 표시
+  _onArchiveClose: null,
+  showArchive(src, title, onClose) {
+    sfx.open();
+    this._onArchiveClose = onClose;
+    $('av-title').textContent = title;
+    $('av-img').src = src;
+    $('archive-viewer').classList.remove('hidden');
   },
 
   showHUD(v = true) { $('hud').classList.toggle('hidden', !v); },

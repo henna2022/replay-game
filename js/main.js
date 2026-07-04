@@ -128,8 +128,15 @@ function wallBetween(x1, z1, x2, z2) {
 }
 
 function handleTap(ndcX, ndcY) {
-  if (state !== 'playing') return;
+  if (state !== 'playing' || missionOpen) return;
   raycaster.setFromCamera({ x: ndcX, y: ndcY }, camera);
+  // 1) 미션 안내판 우선 (탭하면 확대해서 읽기)
+  const panelHits = raycaster.intersectObjects(world.archivePanels, false);
+  if (panelHits.length && panelHits[0].distance < INTERACT_DIST + 2) {
+    const a = panelHits[0].object.userData.archive;
+    if (a) { player.enabled = false; ui.showArchive(a.src, a.title, () => { player.enabled = (state === 'playing'); }); return; }
+  }
+  // 2) 전시물 히트박스 → 미션
   const hits = raycaster.intersectObjects(world.hitboxes, false);
   if (hits.length && hits[0].distance < INTERACT_DIST) {
     interact(hits[0].object.userData.zoneId);
