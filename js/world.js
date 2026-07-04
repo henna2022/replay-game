@@ -639,7 +639,7 @@ const builders = {
       hide: [lovot], onLoad: (w) => { lovotModel = w; },
     });
     loadModelSlot(g, 'assets/models/balu.glb', {
-      height: 0.62, x: 0.95, y: 0.82, z: 0.15, ry: -Math.PI / 2,
+      height: 0.93, x: 0.95, y: 0.82, z: 0.15, ry: -Math.PI / 2,
       hide: [ballu], onLoad: (w) => { balluModel = w; },
     });
 
