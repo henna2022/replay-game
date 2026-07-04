@@ -479,11 +479,38 @@ const builders = {
         if (dogModel && dogModel.userData.hasClip) {
           // GLB 애니메이션 클립 구동 (제자리 유지)
         } else if (dogModel) {
-          // 클립 없는 정지 모델 — 절차 흔들/바운스
-          dogModel.rotation.y = dogModel.userData.baseRy + Math.sin(t * 0.7) * 0.18;
-          dogModel.position.y = Math.abs(Math.sin(t * 2.3)) * 0.025;
+          // 클립 없는 정지 모델 — 리깅 없이 강체 트랜스폼만으로 '춤추는 로봇개' 연출.
+          // 발은 wrap 원점(y=0)에 고정 → scale.y 로 squash&stretch 하면 발 붙인 채 몸통만 눌림/늘림.
+          const ud = dogModel.userData;
+          if (ud.baseX === undefined) { ud.baseX = dogModel.position.x; ud.baseY = dogModel.position.y; ud.baseZ = dogModel.position.z; }
+          const beat = t * 5.0;                     // 4/4 비트감 (~95bpm 홉)
+          const hop = Math.abs(Math.sin(beat));     // 0→1→0 홉 위상
+          // 1) 비트 홉 + squash&stretch (부피 보존: 눌리면 옆으로 퍼짐)
+          dogModel.position.y = ud.baseY + hop * 0.14;
+          const sq = 1 + Math.cos(beat) * 0.12;     // 착지 순간 납작, 정점에서 길쭉
+          dogModel.scale.y = 1 / sq;
+          dogModel.scale.x = dogModel.scale.z = sq;
+          // 2) 행복한 개 '엉덩이 흔들' — 몸통 롤 + 좌우 무게이동
+          const wiggle = Math.sin(beat * 0.5);
+          dogModel.rotation.z = wiggle * 0.16;
+          dogModel.position.x = ud.baseX + Math.sin(beat * 0.5 + 0.6) * 0.08;
+          dogModel.position.z = ud.baseZ;
+          // 3) 고개 까딱(pitch) + 좌우 두리번(yaw sway)
+          const phrase = t * 1.1;
+          const yaw = Math.sin(phrase) * 0.5 + Math.sin(beat) * 0.05;
+          dogModel.rotation.x = Math.sin(beat) * 0.10;
+          // 4) 6초마다 0.9초짜리 스핀 무브 한 바퀴 (로봇 쇼 느낌, 2π라 이음새 없음)
+          const SPIN_PERIOD = 6.0, SPIN_DUR = 0.9;
+          const sp = t % SPIN_PERIOD;
+          let spin = 0;
+          if (sp < SPIN_DUR) { const k = sp / SPIN_DUR; spin = (k * k * (3 - 2 * k)) * Math.PI * 2; }
+          dogModel.rotation.y = ud.baseRy + yaw + spin;
         } else {
-          dog.rotation.y = 0.6 + Math.sin(t * 0.7) * 0.08;
+          // GLB 미로드 시 절차 생성 박스 개도 홉 + 몸통 흔들
+          const beat = t * 5.0;
+          dog.rotation.y = 0.6 + Math.sin(t * 1.1) * 0.35;
+          dog.rotation.z = Math.sin(beat * 0.5) * 0.12;
+          dog.position.y = Math.abs(Math.sin(beat)) * 0.1;
         }
       },
     };
